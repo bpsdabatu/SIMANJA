@@ -7,9 +7,10 @@ import { adminClient } from "@/lib/supabase/admin";
 import { serverEnv } from "@/lib/env";
 import { getSessionUser } from "@/lib/auth/session";
 import { keyedHash } from "@/lib/auth/crypto";
-import { CONTEXT_COOKIE, CONTEXT_TTL_SECONDS, isStage, signContext } from "@/lib/auth/context";
+import { CONTEXT_COOKIE, isStage } from "@/lib/auth/context";
+import { setContextCookie } from "@/lib/auth/context-cookie";
 import { passwordSchema } from "@/lib/auth/password-policy";
-import type { FormState } from "@/app/login/actions";
+import type { FormState } from "@/lib/form-state";
 
 /** Memilih konteks (tahun + tahapan). Divalidasi ke database sesuai hak pengguna. */
 export async function selectContextAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -31,20 +32,7 @@ export async function selectContextAction(_prev: FormState, formData: FormData):
     return { error: "Konteks anggaran tidak tersedia atau Anda tidak berwenang memakainya." };
   }
 
-  const token = await signContext(serverEnv().APP_SECRET, {
-    u: user.id,
-    y: year,
-    s: stage,
-    v: versionId as string,
-    exp: Math.floor(Date.now() / 1000) + CONTEXT_TTL_SECONDS,
-  });
-  (await cookies()).set(CONTEXT_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: CONTEXT_TTL_SECONDS,
-  });
+  await setContextCookie(user.id, { year, stage, versionId: versionId as string });
   redirect("/dashboard");
 }
 
@@ -90,5 +78,5 @@ export async function changePasswordAction(_prev: FormState, formData: FormData)
     organization_id: user.organizationId,
     table_name: "auth",
   });
-  redirect("/pilih-konteks");
+  redirect("/dashboard");
 }

@@ -1,6 +1,6 @@
 -- =====================================================================
 -- 0001_core_identity.sql
--- SIMANJA Phase 1: organisasi, profil, peran/izin, scope, audit, pengaturan
+-- SIMASPRAJA Phase 1: organisasi, profil, peran/izin, scope, audit, pengaturan
 -- =====================================================================
 create extension if not exists pgcrypto;
 

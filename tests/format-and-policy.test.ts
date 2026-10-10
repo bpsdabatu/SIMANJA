@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { formatDateTimeWIB, formatInteger, formatPercent, formatRupiah } from "@/lib/format";
 import { passwordSchema } from "@/lib/auth/password-policy";
@@ -38,6 +40,8 @@ describe("kebijakan kata sandi", () => {
   );
 });
 
+const ROOT = path.resolve(__dirname, "..");
+
 describe("navigasi", () => {
   it("setiap menu terikat pada satu kode izin yang ada di matriks", () => {
     const known = new Set([
@@ -46,7 +50,14 @@ describe("navigasi", () => {
     ]);
     for (const i of NAV_ITEMS) expect(known.has(i.permission), i.label).toBe(true);
   });
-  it("hanya Dasbor yang sudah tersedia pada Phase 1", () => {
-    expect(NAV_ITEMS.filter((i) => !i.phase).map((i) => i.href)).toEqual(["/dashboard"]);
+  it("seluruh menu aktif dan setiap tujuan memiliki halaman", () => {
+    for (const i of NAV_ITEMS) {
+      const file = path.join(ROOT, "src", "app", "(app)", i.href.slice(1), "page.tsx");
+      expect(existsSync(file), `${i.label} -> ${i.href}`).toBe(true);
+    }
+  });
+  it("href unik dan label tidak kosong", () => {
+    expect(new Set(NAV_ITEMS.map((i) => i.href)).size).toBe(NAV_ITEMS.length);
+    for (const i of NAV_ITEMS) expect(i.label.length).toBeGreaterThan(0);
   });
 });

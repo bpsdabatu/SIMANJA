@@ -1,20 +1,20 @@
-# SIMANJA - Sistem Informasi Manajemen Kinerja
+# SIMASPRAJA - Sistem Informasi Monitoring dan Evaluasi Perencanaan, Realisasi Anggaran dan Kinerja
 
 Aplikasi web full-stack untuk OPD: anggaran, anggaran kas, realisasi belanja (SP2D), LRA, dan alur dokumen pengadaan.
 Stack: Next.js 15 (App Router, TypeScript) · Tailwind CSS · Supabase (Postgres, Auth, Storage) · Vercel.
 
-> **Status: Phase 1 dari 8 selesai dan teruji lokal.** Belum ada deployment ke Supabase/Vercel yang dilakukan;
-> aplikasi belum boleh dianggap siap produksi. Lihat [docs/phase-1-report.md](docs/phase-1-report.md).
+> **Status:** seluruh menu sudah berfungsi (kode, migrasi, dan tes otomatis). **Belum diuji terhadap proyek Supabase/Vercel nyata** dan
+> belum boleh dianggap siap produksi sebelum checklist [docs/security-checklist.md](docs/security-checklist.md) dijalankan.
+> Ringkasan perubahan: [docs/laporan-pengembangan.md](docs/laporan-pengembangan.md).
 
-## Yang sudah ada (Phase 1)
-- Login berbasis **username** (server-mediated), throttling, pesan galat generik, audit autentikasi.
-- Pemilihan konteks **Tahun Anggaran + Tahapan** (Murni/Pergeseran/Perubahan), divalidasi ulang ke database.
-- RBAC 4 peran (Admin, PPK, PPTK, PPBJ) + scope penugasan, **RLS deny-by-default** pada seluruh tabel.
-- Skema lengkap 4 migrasi: master, anggaran berversi, anggaran kas, kontrak (komitmen), transaksi/pembayaran/SP2D, dokumen pengadaan, impor, audit append-only.
-- Dasbor KPI nyata (dihitung di database, tunduk pada RLS).
-- Tes: unit (46), database RLS/otorisasi (112), konkurensi, e2e asap (22).
-
-Modul lain (anggaran, kas, realisasi, rekap, LRA, dokumen) ditandai "Fase N" di menu dan **belum diimplementasikan**.
+## Fitur
+- Beranda publik bergaya website, halaman masuk **username + kata sandi + tahun anggaran + tahapan anggaran + kode keamanan sekali pakai**.
+- Throttling per akun/IP, pesan galat generik, audit autentikasi, konteks anggaran divalidasi ulang ke database.
+- RBAC 4 peran (Admin, PPK, PPTK, PPBJ) + penugasan, **RLS deny-by-default** pada seluruh tabel.
+- Modul: Dasbor, Input Anggaran (versi, butir, pagu, impor CSV), Anggaran Kas, Realisasi Belanja (transaksi, SP2D, verifikasi),
+  Rekapitulasi, Laporan Realisasi Anggaran (unduh CSV / cetak PDF), Dokumen Pengadaan (reviu PPBJ, Berita Acara),
+  Data Master, Pengguna & Peran, Log Audit.
+- Tes: unit (78), database RLS + alur kerja (246), e2e asap (Playwright; butuh browser terpasang).
 
 ## Memulai (pengembangan lokal)
 Prasyarat: Node 22, Docker (untuk Supabase CLI), `psql`.

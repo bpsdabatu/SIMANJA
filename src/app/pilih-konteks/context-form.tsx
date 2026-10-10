@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { Loader2 } from "lucide-react";
 import { selectContextAction } from "@/app/actions";
-import type { FormState } from "@/app/login/actions";
+import type { FormState } from "@/lib/form-state";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/card";
 import { Label } from "@/components/ui/input";
@@ -53,7 +53,7 @@ export function ContextForm({ options, defaultYear, defaultStage }: {
           {stages.map((s) => (
             <label
               key={s.code}
-              className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm has-[:checked]:border-teal-600 has-[:checked]:bg-teal-50"
+              className="flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm has-[:checked]:border-navy-600 has-[:checked]:bg-navy-50 has-[:checked]:font-semibold"
             >
               <input
                 type="radio"
@@ -61,7 +61,7 @@ export function ContextForm({ options, defaultYear, defaultStage }: {
                 value={s.code}
                 required
                 defaultChecked={(defaultStage ?? options[0]?.stage) === s.code}
-                className="accent-teal-600"
+                className="accent-navy-700"
               />
               {s.name}
             </label>
@@ -73,7 +73,7 @@ export function ContextForm({ options, defaultYear, defaultStage }: {
         </p>
       </fieldset>
 
-      <Button type="submit" variant="accent" disabled={pending} className="w-full">
+      <Button type="submit" variant="primary" disabled={pending} className="w-full">
         {pending && <Loader2 size={16} className="animate-spin" aria-hidden />}
         Lanjutkan
       </Button>

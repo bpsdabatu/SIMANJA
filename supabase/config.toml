@@ -1,6 +1,6 @@
 # Konfigurasi Supabase CLI (pengembangan lokal). Produksi dikonfigurasi di dashboard Supabase;
 # lihat docs/deployment.md untuk nilai yang harus disamakan.
-project_id = "simanja"
+project_id = "simaspraja"
 
 [api]
 enabled = true

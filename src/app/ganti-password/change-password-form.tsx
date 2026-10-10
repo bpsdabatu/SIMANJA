@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { Loader2 } from "lucide-react";
 import { changePasswordAction } from "@/app/actions";
-import type { FormState } from "@/app/login/actions";
+import type { FormState } from "@/lib/form-state";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";

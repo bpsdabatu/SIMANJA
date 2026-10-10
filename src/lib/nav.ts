@@ -7,22 +7,21 @@ export interface NavItem {
   href: string;
   icon: IconName;
   permission: string;
-  /** Fase pengembangan modul; undefined = sudah tersedia. */
-  phase?: number;
+  group: "Utama" | "Perencanaan & Pelaksanaan" | "Pelaporan" | "Pengadaan" | "Administrasi";
 }
 
-/** Hanya modul berstatus tersedia yang dapat diklik; sisanya ditandai fase rilis (tanpa data tiruan). */
+/** Seluruh menu aktif. Tampil hanya bila pengguna memiliki izin (kenyamanan UI; RLS tetap penentu akses). */
 export const NAV_ITEMS: NavItem[] = [
-  { label: "Dasbor", href: "/dashboard", icon: "layout-dashboard", permission: "dashboard.view" },
-  { label: "Input Anggaran", href: "/anggaran", icon: "wallet", permission: "budget.view", phase: 2 },
-  { label: "Anggaran Kas", href: "/anggaran-kas", icon: "calendar-clock", permission: "cashplan.view", phase: 3 },
-  { label: "Realisasi Belanja", href: "/realisasi", icon: "receipt", permission: "realization.view", phase: 4 },
-  { label: "Rekapitulasi", href: "/rekapitulasi", icon: "table-properties", permission: "recap.view", phase: 5 },
-  { label: "Laporan Realisasi Anggaran", href: "/lra", icon: "file-bar-chart", permission: "lra.view", phase: 6 },
-  { label: "Dokumen Pengadaan", href: "/dokumen", icon: "files", permission: "document.view", phase: 7 },
-  { label: "Data Master", href: "/master", icon: "database", permission: "master.view", phase: 2 },
-  { label: "Pengguna & Peran", href: "/pengguna", icon: "users", permission: "users.manage", phase: 2 },
-  { label: "Log Audit", href: "/audit", icon: "scroll-text", permission: "audit.view", phase: 2 },
+  { label: "Dasbor", href: "/dashboard", icon: "layout-dashboard", permission: "dashboard.view", group: "Utama" },
+  { label: "Input Anggaran", href: "/anggaran", icon: "wallet", permission: "budget.view", group: "Perencanaan & Pelaksanaan" },
+  { label: "Anggaran Kas", href: "/anggaran-kas", icon: "calendar-clock", permission: "cashplan.view", group: "Perencanaan & Pelaksanaan" },
+  { label: "Realisasi Belanja", href: "/realisasi", icon: "receipt", permission: "realization.view", group: "Perencanaan & Pelaksanaan" },
+  { label: "Rekapitulasi", href: "/rekapitulasi", icon: "table-properties", permission: "recap.view", group: "Pelaporan" },
+  { label: "Laporan Realisasi Anggaran", href: "/lra", icon: "file-bar-chart", permission: "lra.view", group: "Pelaporan" },
+  { label: "Dokumen Pengadaan", href: "/dokumen", icon: "files", permission: "document.view", group: "Pengadaan" },
+  { label: "Data Master", href: "/master", icon: "database", permission: "master.view", group: "Administrasi" },
+  { label: "Pengguna & Peran", href: "/pengguna", icon: "users", permission: "users.manage", group: "Administrasi" },
+  { label: "Log Audit", href: "/audit", icon: "scroll-text", permission: "audit.view", group: "Administrasi" },
 ];
 
 export const ROLE_LABEL: Record<string, string> = {

@@ -3,7 +3,7 @@
 # Hasil yang benar: tepat satu berhasil, total pembayaran <= pagu.
 # Jalankan setelah run.sh (database uji sudah berisi skema).
 set -euo pipefail
-: "${PGHOST:=localhost}" "${PGPORT:=5432}" "${PGUSER:=postgres}" "${TEST_DB:=simanja_test}"
+: "${PGHOST:=localhost}" "${PGPORT:=5432}" "${PGUSER:=postgres}" "${TEST_DB:=simaspraja_test}"
 export PGHOST PGPORT PGUSER
 Q() { psql -v ON_ERROR_STOP=1 -qAt -d "${TEST_DB}" "$@"; }
 

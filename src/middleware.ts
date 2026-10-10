@@ -9,6 +9,8 @@ import { CONTEXT_COOKIE, verifyContext } from "@/lib/auth/context";
  *  3. Pengguna tanpa cookie konteks yang sah -> /pilih-konteks.
  * Otorisasi sesungguhnya tetap dilakukan di service layer dan RLS (middleware bukan batas keamanan tunggal).
  */
+// Beranda "/" terbuka untuk siapa pun. "/login" hanya untuk tamu (pengguna masuk dialihkan ke dasbor).
+const OPEN_PATHS = new Set(["/"]);
 const PUBLIC_PATHS = new Set(["/login"]);
 const NO_CONTEXT_PATHS = ["/pilih-konteks", "/ganti-password"];
 
@@ -45,6 +47,7 @@ export async function middleware(request: NextRequest) {
     return res;
   };
 
+  if (OPEN_PATHS.has(path)) return response;
   if (!user) return PUBLIC_PATHS.has(path) ? response : redirectTo("/login");
   if (PUBLIC_PATHS.has(path)) return redirectTo("/dashboard");
 

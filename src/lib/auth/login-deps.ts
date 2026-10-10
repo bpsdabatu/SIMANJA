@@ -2,6 +2,7 @@ import "server-only";
 import { adminClient } from "@/lib/supabase/admin";
 import { userClient } from "@/lib/supabase/server";
 import { keyedHash } from "@/lib/auth/crypto";
+import { checkCaptchaAnswer, openCaptchaToken } from "@/lib/auth/captcha";
 import { serverEnv } from "@/lib/env";
 import type { LoginDeps, ProfileLookup } from "@/lib/auth/login-core";
 
@@ -19,6 +20,20 @@ export async function buildLoginDeps(): Promise<LoginDeps> {
     },
     now: () => new Date(),
     hash: (purpose, value) => keyedHash(env.APP_SECRET, purpose, value),
+
+    async consumeCaptcha(token, answer) {
+      const opened = await openCaptchaToken(env.APP_SECRET, token);
+      if (!opened) return false;
+      // Sekali pakai: nonce dihabiskan SEBELUM jawaban diperiksa, jadi tebakan berulang pada token
+      // yang sama tidak mungkin. Primary key menolak nonce yang sudah pernah dipakai.
+      const nonceHash = await keyedHash(env.APP_SECRET, "captcha-nonce", opened.nonce);
+      const { error } = await admin
+        .from("captcha_nonces")
+        .insert({ nonce_hash: nonceHash, expires_at: new Date(opened.exp * 1000).toISOString() });
+      if (error) return false;
+      void admin.from("captcha_nonces").delete().lt("expires_at", new Date().toISOString());
+      return checkCaptchaAnswer(env.APP_SECRET, opened, answer);
+    },
 
     async countFailures(by, hash, sinceIso) {
       const { count, error } = await admin
@@ -60,6 +75,16 @@ export async function buildLoginDeps(): Promise<LoginDeps> {
     async signIn(email, password) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       return { ok: !error };
+    },
+
+    async signOut() {
+      await supabase.auth.signOut();
+    },
+
+    async resolveContext(year, stage) {
+      const { data, error } = await supabase.rpc("resolve_budget_context", { p_year: year, p_stage: stage });
+      if (error || !data) return null;
+      return data as string;
     },
 
     async audit({ action, actorId, organizationId, ipHash, context }) {

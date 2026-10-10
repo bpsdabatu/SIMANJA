@@ -1,8 +1,8 @@
 {
-  "name": "simanja",
+  "name": "simaspraja",
   "version": "0.1.0",
   "private": true,
-  "description": "SIMANJA - Sistem Informasi Manajemen Kinerja (OPD)",
+  "description": "SIMASPRAJA - Sistem Informasi Monitoring dan Evaluasi Perencanaan, Realisasi Anggaran dan Kinerja (OPD)",
   "engines": {
     "node": ">=20.11"
   },
@@ -19,6 +19,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource-variable/montserrat": "5.3.0",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.3",
     "class-variance-authority": "0.7.1",

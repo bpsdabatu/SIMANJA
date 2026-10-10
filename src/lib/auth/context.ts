@@ -5,7 +5,7 @@ import { b64urlDecode, b64urlEncode, hmacSign, hmacVerify } from "@/lib/auth/cry
  * Cookie ini hanya PETUNJUK; setiap operasi terproteksi tetap memvalidasi ulang konteks
  * ke database lewat RPC resolve_budget_context (berbasis RLS/izin pengguna).
  */
-export const CONTEXT_COOKIE = "simanja_ctx";
+export const CONTEXT_COOKIE = "simaspraja_ctx";
 export const CONTEXT_TTL_SECONDS = 12 * 60 * 60;
 
 export const STAGES = ["murni", "pergeseran", "perubahan"] as const;
