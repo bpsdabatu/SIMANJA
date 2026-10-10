@@ -1,4 +1,4 @@
-# Database SIMANJA
+# Database SIMASPRAJA
 
 ## Definisi finansial (satu sumber kebenaran)
 | Konsep | Sumber | Aturan |

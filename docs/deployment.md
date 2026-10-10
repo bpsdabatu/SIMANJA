@@ -19,6 +19,14 @@
 3. Deploy Preview → jalankan checklist `docs/security-checklist.md` dan uji alur login nyata (lihat §5).
 4. Promosikan ke Production hanya setelah validasi. Verifikasi: login, pilih konteks, dasbor, header keamanan (`curl -I`), dan log audit LOGIN_SUCCESS tercatat.
 
+### 2a. Penggantian nama & alamat (SIMANJA -> SIMASPRAJA)
+1. Vercel -> Project -> Settings -> General: ubah **Project Name** menjadi `simaspraja`; domain `simaspraja.vercel.app` otomatis tersedia.
+   Alamat lama `simanja-blue.vercel.app` dapat dipertahankan sementara sebagai domain tambahan lalu dialihkan/dihapus.
+2. Tambahkan env `NEXT_PUBLIC_SITE_URL=https://simaspraja.vercel.app` (dan opsional `NEXT_PUBLIC_ORG_NAME`), lalu redeploy.
+3. Jalankan migrasi baru `0005_login_captcha.sql` dan `0006_workflows.sql` (`supabase db push`) **sebelum** deploy kode ini.
+4. Cookie konteks diganti namanya; pengguna yang sedang masuk cukup masuk ulang sekali.
+5. Akun lama tetap berlaku: email internal tersimpan di database, bukan di kode.
+
 ## 3. Rollback
 - **Aplikasi**: Vercel → Deployments → *Promote to Production* pada rilis stabil sebelumnya (instan, tanpa build ulang).
 - **Database**: migrasi bersifat maju (forward-only). Sebelum `db push` produksi, ambil backup (§4). Bila migrasi bermasalah: pulihkan dari backup/PITR, atau buat migrasi korektif baru; jangan mengedit migrasi yang sudah diterapkan.
@@ -26,8 +34,8 @@
 
 ## 4. Backup & pemulihan
 - Plan berbayar Supabase: aktifkan **PITR** dan backup harian otomatis. Plan gratis: tidak ada PITR, jadi jadwalkan dump:
-  `pg_dump "$DATABASE_URL" --format=custom --no-owner --file=simanja-$(date +%F).dump` (simpan terenkripsi di luar Supabase).
-- Uji pemulihan berkala ke proyek kosong: `pg_restore --no-owner --dbname "$TARGET_URL" simanja-YYYY-MM-DD.dump`, lalu `npm run test:db` tidak berlaku pada data nyata; verifikasi manual jumlah baris dan rekonsiliasi KPI.
+  `pg_dump "$DATABASE_URL" --format=custom --no-owner --file=simaspraja-$(date +%F).dump` (simpan terenkripsi di luar Supabase).
+- Uji pemulihan berkala ke proyek kosong: `pg_restore --no-owner --dbname "$TARGET_URL" simaspraja-YYYY-MM-DD.dump`, lalu `npm run test:db` tidak berlaku pada data nyata; verifikasi manual jumlah baris dan rekonsiliasi KPI.
 - File Storage tidak termasuk dump database; cadangkan bucket secara terpisah.
 - Retensi: audit_logs dan transaksi keuangan **tidak dihapus**; tetapkan kebijakan arsip setelah ketentuan retensi OPD dikonfirmasi `[KONFIGURABLE]`.
 

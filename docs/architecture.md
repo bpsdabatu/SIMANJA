@@ -1,4 +1,4 @@
-# SIMANJA - Arsitektur, Relasi Database, dan Rencana Implementasi
+# SIMASPRAJA - Arsitektur, Relasi Database, dan Rencana Implementasi
 
 Status: **Draf Phase 1**. Aturan bisnis yang belum dikonfirmasi OPD ditandai `[KONFIGURABLE]`.
 
@@ -35,7 +35,7 @@ Prinsip:
 ### Login berbasis username
 1. Pengguna mengirim username + password ke Server Action.
 2. Server (rate limit per IP + per username) mencari `profiles.username` memakai klien admin.
-3. Email internal (`<uuid>@auth.simanja.invalid`) tidak pernah dikirim ke browser.
+3. Email internal (`<uuid>@auth.simaspraja.invalid`) tidak pernah dikirim ke browser.
 4. Server memanggil `signInWithPassword` dengan email internal; hasil sesi disimpan ke cookie HTTP-only.
 5. Semua kegagalan mengembalikan pesan generik yang sama dengan waktu respons relatif seragam.
 6. Percobaan dicatat di `auth_attempts` dan `audit_logs`.

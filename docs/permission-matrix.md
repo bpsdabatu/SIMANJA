@@ -1,4 +1,4 @@
-# Matriks Izin SIMANJA
+# Matriks Izin SIMASPRAJA
 
 Legenda: **A** = diizinkan (dengan pembatasan scope/assignment), **-** = ditolak, **C** = bergantung konfigurasi alur persetujuan `[KONFIGURABLE]`.
 Aksi: V=lihat, C=buat, E=ubah, S=ajukan, R=reviu, P=setujui, F=finalisasi, X=ekspor, M=administrasi.

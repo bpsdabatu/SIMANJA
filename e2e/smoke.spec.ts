@@ -1,12 +1,21 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("gerbang akses (tanpa sesi)", () => {
-  for (const path of ["/dashboard", "/pilih-konteks", "/ganti-password", "/anggaran", "/"]) {
+  for (const path of ["/dashboard", "/pilih-konteks", "/ganti-password", "/anggaran", "/anggaran-kas", "/realisasi", "/rekapitulasi", "/lra", "/dokumen", "/master", "/pengguna", "/audit"]) {
     test(`${path} dialihkan ke /login`, async ({ page }) => {
       await page.goto(path);
       await expect(page).toHaveURL(/\/login$/);
     });
   }
+
+  test("beranda terbuka untuk umum dan menampilkan logo serta tautan masuk", async ({ page }) => {
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Monitoring");
+    await expect(page.getByAltText(/Logo SIMASPRAJA/).first()).toBeVisible();
+    await page.getByRole("link", { name: "Masuk", exact: true }).first().click();
+    await expect(page).toHaveURL(/\/login$/);
+  });
 
   test("respons membawa header keamanan", async ({ request }) => {
     const res = await request.get("/login");
@@ -26,6 +35,18 @@ test.describe("halaman login", () => {
     await expect(page.getByLabel("Username")).toBeVisible();
     await expect(page.getByLabel("Kata sandi", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Masuk" })).toBeVisible();
+  });
+
+  test("urutan kolom: username, kata sandi, tahun anggaran, tahapan anggaran, kode keamanan", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.getByLabel("Tahun Anggaran")).toBeVisible();
+    await expect(page.getByRole("group", { name: "Tahapan Anggaran" })).toBeVisible();
+    await expect(page.getByRole("radio")).toHaveCount(3);
+    await expect(page.getByLabel("Ketik kode keamanan")).toBeVisible();
+    await expect(page.getByAltText(/Kode keamanan/)).toBeVisible();
+    const order = await page.locator("form [name]").evaluateAll((els) => els.map((e) => e.getAttribute("name")));
+    expect(order.filter((n) => ["username", "password", "year", "stage", "captchaAnswer"].includes(n!))).toEqual(
+      ["username", "password", "year", "stage", "stage", "stage", "captchaAnswer"]);
   });
 
   test("tidak ada kolom email (login memakai username)", async ({ page }) => {
@@ -50,6 +71,7 @@ test.describe("halaman login", () => {
     await page.goto("/login");
     await page.getByLabel("Username").fill("pengguna.uji");
     await page.getByLabel("Kata sandi", { exact: true }).fill("KataSandiUji123");
+    await page.getByLabel("Ketik kode keamanan").fill("ABCDE");
     await page.getByRole("button", { name: "Masuk" }).click();
     const alert = page.getByRole("alert");
     await expect(alert).toBeVisible({ timeout: 15_000 });

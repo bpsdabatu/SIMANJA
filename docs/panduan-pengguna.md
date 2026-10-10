@@ -1,7 +1,7 @@
-# Panduan Pengguna SIMANJA (Phase 1)
+# Panduan Pengguna SIMASPRAJA (Phase 1)
 
 ## 1. Masuk
-1. Buka alamat SIMANJA, isi **Username** dan **Kata sandi** dari administrator. Ikon mata menampilkan/menyembunyikan kata sandi.
+1. Buka alamat SIMASPRAJA, isi **Username** dan **Kata sandi** dari administrator. Ikon mata menampilkan/menyembunyikan kata sandi.
 2. Pesan "Username atau kata sandi tidak sesuai" tidak menjelaskan mana yang salah; ini disengaja demi keamanan.
 3. Setelah beberapa kali gagal beruntun, akses ditahan sementara (±15 menit). Bila akun terkunci atau lupa kata sandi, hubungi administrator; tidak ada pemulihan lewat email.
 
