@@ -1,0 +1,102 @@
+/**
+ * Logika login berbasis username, bebas dari Next.js/Supabase agar dapat diuji.
+ * Semua efek samping masuk lewat `LoginDeps`.
+ *
+ * Jaminan keamanan:
+ *  - Pesan galat generik yang sama untuk username tak dikenal, akun nonaktif, dan kata sandi salah.
+ *  - Email internal tidak pernah keluar dari fungsi ini (hasil hanya ok/pesan).
+ *  - Throttling per username (dihash) dan per IP (dihash), termasuk untuk username yang tidak ada.
+ *  - Untuk username tak dikenal tetap dilakukan satu panggilan signIn palsu agar waktu respons serupa.
+ */
+export const GENERIC_LOGIN_ERROR = "Username atau kata sandi tidak sesuai.";
+export const THROTTLED_LOGIN_ERROR = "Terlalu banyak percobaan masuk. Silakan coba lagi beberapa menit lagi.";
+export const DUMMY_EMAIL = "tidak-ada@auth.simanja.invalid";
+
+export const USERNAME_RE = /^[a-z0-9._-]{3,32}$/;
+
+export interface ProfileLookup {
+  id: string;
+  status: "active" | "suspended" | "disabled";
+  organizationId: string;
+  internalEmail: string;
+  mustChangePassword: boolean;
+}
+
+export interface LoginDeps {
+  config: { maxFailuresPerUser: number; maxFailuresPerIp: number; windowMinutes: number };
+  now(): Date;
+  hash(purpose: "username" | "ip", value: string): Promise<string>;
+  countFailures(by: "username_hash" | "ip_hash", hash: string, sinceIso: string): Promise<number>;
+  recordAttempt(a: { usernameHash: string; ipHash: string; succeeded: boolean }): Promise<void>;
+  findProfile(username: string): Promise<ProfileLookup | null>;
+  signIn(email: string, password: string): Promise<{ ok: boolean }>;
+  audit(e: {
+    action: "LOGIN_SUCCESS" | "LOGIN_FAILURE" | "LOGIN_THROTTLED";
+    actorId?: string;
+    organizationId?: string;
+    ipHash: string;
+    context?: Record<string, unknown>;
+  }): Promise<void>;
+  touchLastLogin(profileId: string): Promise<void>;
+}
+
+export type LoginResult =
+  | { ok: true; mustChangePassword: boolean }
+  | { ok: false; message: string };
+
+export function normalizeUsername(raw: string): string {
+  return raw.trim().toLowerCase();
+}
+
+export async function performLogin(
+  deps: LoginDeps,
+  input: { username: string; password: string; ip: string | null },
+): Promise<LoginResult> {
+  const username = normalizeUsername(input.username);
+  const password = input.password;
+
+  // Validasi bentuk. Tetap generik: tidak membocorkan aturan format ke penyerang.
+  if (!USERNAME_RE.test(username) || password.length < 1 || password.length > 128) {
+    return { ok: false, message: GENERIC_LOGIN_ERROR };
+  }
+
+  const usernameHash = await deps.hash("username", username);
+  const ipHash = await deps.hash("ip", input.ip ?? "unknown");
+  const since = new Date(deps.now().getTime() - deps.config.windowMinutes * 60_000).toISOString();
+
+  const [userFails, ipFails] = await Promise.all([
+    deps.countFailures("username_hash", usernameHash, since),
+    deps.countFailures("ip_hash", ipHash, since),
+  ]);
+  if (userFails >= deps.config.maxFailuresPerUser || ipFails >= deps.config.maxFailuresPerIp) {
+    await deps.audit({ action: "LOGIN_THROTTLED", ipHash });
+    return { ok: false, message: THROTTLED_LOGIN_ERROR };
+  }
+
+  const profile = await deps.findProfile(username);
+  const usable = profile !== null && profile.status === "active";
+
+  const signed = await deps.signIn(usable ? profile.internalEmail : DUMMY_EMAIL, password);
+
+  if (!usable || !signed.ok) {
+    await deps.recordAttempt({ usernameHash, ipHash, succeeded: false });
+    await deps.audit({
+      action: "LOGIN_FAILURE",
+      actorId: profile?.id,
+      organizationId: profile?.organizationId,
+      ipHash,
+      context: { reason: !profile ? "unknown_user" : !usable ? "inactive_account" : "bad_credentials" },
+    });
+    return { ok: false, message: GENERIC_LOGIN_ERROR };
+  }
+
+  await deps.recordAttempt({ usernameHash, ipHash, succeeded: true });
+  await deps.touchLastLogin(profile.id);
+  await deps.audit({
+    action: "LOGIN_SUCCESS",
+    actorId: profile.id,
+    organizationId: profile.organizationId,
+    ipHash,
+  });
+  return { ok: true, mustChangePassword: profile.mustChangePassword };
+}
