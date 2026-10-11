@@ -14,7 +14,7 @@ import { PrintFooter, PrintHeader } from "@/components/ui/report";
 import { getOrganizationName } from "@/lib/lookups";
 import { PptkImportForm } from "./pptk-import-form";
 import { cn } from "@/lib/utils";
-import { deleteMasterAction, importMasterAction, saveMasterAction, toggleMasterAction } from "./actions";
+import { deleteMasterAction, importMasterAction, importMasterWorkbookAction, saveMasterAction, toggleMasterAction } from "./actions";
 
 export const metadata: Metadata = { title: "Data Master" };
 export const dynamic = "force-dynamic";
@@ -98,6 +98,22 @@ export default async function MasterPage({ searchParams }: { searchParams: Promi
       <Flash ok={sp.ok} err={sp.err} />
 
       <MasterTabs tab={tab} canUsers={canUsers} />
+
+      {canManage && (
+        <Card className="no-print">
+          <details>
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-sm font-semibold text-navy-800 [&::-webkit-details-marker]:hidden">
+              <Upload size={16} aria-hidden /> Unggah satu berkas Excel berisi banyak sheet (Program, Kegiatan, Sub Kegiatan, Belanja, Sumber Dana)
+            </summary>
+            <form action={importMasterWorkbookAction} encType="multipart/form-data" className="space-y-4 border-t border-slate-100 p-5">
+              <p className="text-sm text-slate-600">Sheet dikenali dari namanya (<code className="rounded bg-slate-100 px-1">PROGRAM, KEGIATAN, SUB KEGIATAN, BELANJA, SUMBER DANA</code>) dan diproses berurutan. Kolom: <code className="rounded bg-slate-100 px-1">Kode, Nama</code>. Kode induk (program/kegiatan) diturunkan otomatis dari kode. Aman diulang: kode yang sudah ada dilewati.</p>
+              <Field label="Berkas Excel (.xlsx)" htmlFor="wb-file"><Input id="wb-file" name="file" type="file" accept=".xlsx" required className="h-auto py-2" /></Field>
+              <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="updateExisting" value="true" className="h-4 w-4 rounded border-slate-300" /> Perbarui nama bila kode sudah ada</label>
+              <SubmitButton variant="accent" pendingText="Mengimpor...">Unggah berkas</SubmitButton>
+            </form>
+          </details>
+        </Card>
+      )}
 
       {canManage && IMPORT_SPECS[tab] && (
         <Card className="no-print">

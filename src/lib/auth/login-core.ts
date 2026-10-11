@@ -20,7 +20,7 @@ export const THROTTLED_LOGIN_ERROR = "Terlalu banyak percobaan masuk. Silakan co
 export const CAPTCHA_ERROR = "Kode keamanan tidak sesuai atau sudah kedaluwarsa. Silakan masukkan kode yang baru.";
 export const CONTEXT_FORM_ERROR = "Pilih Tahun Anggaran dan Tahapan Anggaran yang valid.";
 export const CONTEXT_UNAVAILABLE_ERROR =
-  "Tahun dan tahapan anggaran yang dipilih belum tersedia untuk akun Anda. Pilih kombinasi lain atau hubungi administrator.";
+  "Tahun dan tahapan anggaran yang dipilih belum tersedia (belum dibuat/diaktifkan) untuk akun Anda. Pilih kombinasi lain, atau minta administrator membuat dan mengaktifkannya di menu Input Anggaran.";
 export const DUMMY_EMAIL = "tidak-ada@auth.simaspraja.invalid";
 
 export const USERNAME_RE = /^[a-z0-9._-]{3,32}$/;

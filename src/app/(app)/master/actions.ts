@@ -4,7 +4,7 @@ import { requireModule } from "@/lib/auth/guard";
 import { userClient } from "@/lib/supabase/server";
 import { flashRedirect } from "@/lib/flash";
 import { MASTER } from "@/lib/master-config";
-import { readTable } from "@/lib/spreadsheet";
+import { readTable, readWorkbook } from "@/lib/spreadsheet";
 import { parseMasterTable, rowKey, IMPORT_SPECS, type ParsedRow } from "@/lib/master-import";
 import { friendlyError, isUuid, optStr, runAction, str } from "@/lib/action-utils";
 
@@ -65,23 +65,15 @@ export async function deleteMasterAction(fd: FormData): Promise<void> {
   return runAction(back, `${cfg.label} dihapus.`, async () => supabase.rpc("delete_master_row", { p_entity: cfg.table, p_id: id }));
 }
 
-export async function importMasterAction(fd: FormData): Promise<void> {
-  const { user } = await requireModule("master.manage");
-  const entityKey = str(fd, "entity", 40);
-  const cfg = MASTER[entityKey];
-  const spec = IMPORT_SPECS[entityKey];
-  const back = `/master?tab=${encodeURIComponent(entityKey)}`;
-  if (!cfg || !spec) flashRedirect("/master", { err: "Jenis master tidak dapat diimpor." });
-  const updateExisting = str(fd, "updateExisting", 5) === "true";
+type ImportOutcome = { error: string } | { inserted: number; updated: number; skipped: number };
+const fail = (problems: string[]) => ({ error: `Impor dibatalkan, tidak ada data yang disimpan. ${problems.length} masalah: ${problems.slice(0, 5).join("; ")}${problems.length > 5 ? " ..." : ""}` });
 
-  const file = fd.get("file");
-  if (!(file instanceof File) || file.size === 0) flashRedirect(back, { err: "Pilih berkas Excel (.xlsx) atau CSV terlebih dahulu." });
-  const read = await readTable(file as File);
-  if (!read.ok) flashRedirect(back, { err: read.error });
-  const parsed = parseMasterTable(entityKey, (read as { rows: string[][] }).rows);
-  if (parsed.problems.length) {
-    flashRedirect(back, { err: `Impor dibatalkan, tidak ada data yang disimpan. ${parsed.problems.length} masalah: ${parsed.problems.slice(0, 5).join("; ")}${parsed.problems.length > 5 ? " ..." : ""}` });
-  }
+/** Inti impor satu jenis master dari tabel mentah. Validasi seluruh baris dulu; penyisipan baru dilakukan dalam satu pernyataan. */
+async function runMasterImport(organizationId: string, entityKey: string, table: string[][], updateExisting: boolean): Promise<ImportOutcome> {
+  const cfg = MASTER[entityKey]!;
+  const user = { organizationId };
+  const parsed = parseMasterTable(entityKey, table);
+  if (parsed.problems.length) return fail(parsed.problems);
 
   const supabase = await userClient();
   const rows = parsed.rows;
@@ -154,19 +146,66 @@ export async function importMasterAction(fd: FormData): Promise<void> {
     const row = build(r);
     if (row) toInsert.push(row);
   }
-  if (problems.length) {
-    flashRedirect(back, { err: `Impor dibatalkan, tidak ada data yang disimpan. ${problems.length} masalah: ${problems.slice(0, 5).join("; ")}${problems.length > 5 ? " ..." : ""}` });
-  }
+  if (problems.length) return fail(problems);
 
   if (toInsert.length) {
     const { error } = await supabase.from(cfg.table).insert(toInsert);
-    if (error) flashRedirect(back, { err: `Impor dibatalkan, tidak ada data yang disimpan. ${friendlyError(error)}` });
+    if (error) return { error: `Impor dibatalkan, tidak ada data yang disimpan. ${friendlyError(error)}` };
   }
   let updated = 0;
   for (const u of toUpdate) {
     const { error } = await supabase.from(cfg.table).update(u.patch).eq("id", u.id);
-    if (error) flashRedirect(back, { err: `${toInsert.length} ditambahkan, ${updated} diperbarui, lalu berhenti: ${friendlyError(error)}` });
+    if (error) return { error: `${toInsert.length} ditambahkan, ${updated} diperbarui, lalu berhenti: ${friendlyError(error)}` };
     updated++;
   }
-  flashRedirect(back, { ok: `Impor ${cfg.label} selesai: ${toInsert.length} ditambahkan, ${updated} diperbarui, ${skipped} dilewati (kode sudah ada).` });
+  return { inserted: toInsert.length, updated, skipped };
+}
+
+export async function importMasterAction(fd: FormData): Promise<void> {
+  const { user } = await requireModule("master.manage");
+  const entityKey = str(fd, "entity", 40);
+  const cfg = MASTER[entityKey];
+  const back = `/master?tab=${encodeURIComponent(entityKey)}`;
+  if (!cfg || !IMPORT_SPECS[entityKey]) flashRedirect("/master", { err: "Jenis master tidak dapat diimpor." });
+  const file = fd.get("file");
+  if (!(file instanceof File) || file.size === 0) flashRedirect(back, { err: "Pilih berkas Excel (.xlsx) atau CSV terlebih dahulu." });
+  const read = await readTable(file as File);
+  if (!read.ok) flashRedirect(back, { err: read.error });
+  const r = await runMasterImport(user.organizationId, entityKey, (read as { rows: string[][] }).rows, str(fd, "updateExisting", 5) === "true");
+  if ("error" in r) flashRedirect(back, { err: r.error });
+  const o = r as { inserted: number; updated: number; skipped: number };
+  flashRedirect(back, { ok: `Impor ${cfg!.label} selesai: ${o.inserted} ditambahkan, ${o.updated} diperbarui, ${o.skipped} dilewati (kode sudah ada).` });
+}
+
+const SHEET_ORDER: { entity: string; names: string[] }[] = [
+  { entity: "programs", names: ["program"] },
+  { entity: "activities", names: ["kegiatan"] },
+  { entity: "sub_activities", names: ["sub kegiatan", "subkegiatan", "sub_kegiatan"] },
+  { entity: "expenditure_accounts", names: ["belanja", "rekening", "rekening belanja"] },
+  { entity: "funding_sources", names: ["sumber dana", "sumberdana", "sumber_dana"] },
+  { entity: "procurement_methods", names: ["metode pengadaan", "metode"] },
+  { entity: "suppliers", names: ["penyedia"] },
+];
+
+/** Impor satu berkas Excel berisi banyak sheet (PROGRAM, KEGIATAN, SUB KEGIATAN, BELANJA, SUMBER DANA, ...) secara berurutan. Aman diulang: kode yang sudah ada dilewati. */
+export async function importMasterWorkbookAction(fd: FormData): Promise<void> {
+  const { user } = await requireModule("master.manage");
+  const back = "/master?tab=programs";
+  const file = fd.get("file");
+  if (!(file instanceof File) || file.size === 0) flashRedirect(back, { err: "Pilih berkas Excel (.xlsx)." });
+  const wb = await readWorkbook(file as File);
+  if (!wb.ok) flashRedirect(back, { err: wb.error });
+  const sheets = (wb as { sheets: { name: string; rows: string[][] }[] }).sheets;
+  const updateExisting = str(fd, "updateExisting", 5) === "true";
+  const done: string[] = [];
+  for (const { entity, names } of SHEET_ORDER) {
+    const sh = sheets.find((x) => names.includes(x.name.trim().toLowerCase()));
+    if (!sh || sh.rows.length === 0) continue;
+    const r = await runMasterImport(user.organizationId, entity, sh.rows, updateExisting);
+    if ("error" in r) flashRedirect(back, { err: `Sheet ${sh.name}: ${r.error}${done.length ? ` (sheet sebelumnya sudah tersimpan: ${done.join("; ")})` : ""}` });
+    const o = r as { inserted: number; updated: number; skipped: number };
+    done.push(`${MASTER[entity]!.label} +${o.inserted}${o.updated ? ` ~${o.updated}` : ""}${o.skipped ? ` (${o.skipped} dilewati)` : ""}`);
+  }
+  if (done.length === 0) flashRedirect(back, { err: "Tidak ada sheet yang dikenali. Nama sheet: PROGRAM, KEGIATAN, SUB KEGIATAN, BELANJA, SUMBER DANA." });
+  flashRedirect(back, { ok: `Impor berkas selesai — ${done.join("; ")}.` });
 }

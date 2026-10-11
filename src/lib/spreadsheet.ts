@@ -109,3 +109,29 @@ export const xlsxHeaders = (filename: string) => ({
   "Content-Disposition": `attachment; filename="${filename}"`,
   "Cache-Control": "no-store",
 });
+
+export type WorkbookResult = { ok: true; sheets: { name: string; rows: string[][] }[] } | { ok: false; error: string };
+
+/** Membaca SEMUA lembar kerja .xlsx (untuk impor satu berkas berisi banyak sheet). */
+export async function readWorkbook(file: File): Promise<WorkbookResult> {
+  if (file.size === 0) return { ok: false, error: "Berkas kosong." };
+  if (file.size > MAX_UPLOAD_BYTES) return { ok: false, error: "Berkas terlalu besar (maksimal 2 MB)." };
+  if (!file.name.toLowerCase().endsWith(".xlsx")) return { ok: false, error: "Impor beberapa sheet hanya untuk berkas .xlsx." };
+  try {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load((await file.arrayBuffer()) as ExcelJS.Buffer);
+    const sheets = wb.worksheets.map((ws) => {
+      const rows: string[][] = [];
+      const width = Math.min(ws.columnCount, 60);
+      ws.eachRow({ includeEmpty: false }, (row) => {
+        const cells: string[] = [];
+        for (let c = 1; c <= width; c++) cells.push(cellText(row.getCell(c).value));
+        if (cells.some((x) => x !== "")) rows.push(cells);
+      });
+      return { name: ws.name, rows };
+    });
+    return { ok: true, sheets };
+  } catch {
+    return { ok: false, error: "Berkas Excel tidak dapat dibaca. Pastikan formatnya .xlsx yang valid." };
+  }
+}

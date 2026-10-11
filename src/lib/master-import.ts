@@ -5,7 +5,7 @@ import { normHeader } from "@/lib/header";
  * Tiap entitas punya kolom berkode dan alias nama kolom yang diterima.
  */
 export interface ImportColumn { key: "code" | "name" | "parent" | "npwp" | "address" | "year" | "extra"; label: string; aliases: string[]; required?: boolean; max: number }
-export interface ImportSpec { columns: ImportColumn[]; sample: string[] }
+export interface ImportSpec { columns: ImportColumn[]; sample: string[]; /** Bila kolom induk tidak ada: kode induk = kode sendiri dikurangi N segmen terakhir (dipisah titik). */ deriveParentDrop?: number }
 
 const code = (extra: string[] = []): ImportColumn => ({ key: "code", label: "kode", aliases: ["kode", "code", ...extra], required: true, max: 40 });
 const name = (extra: string[] = [], max = 300): ImportColumn => ({ key: "name", label: "nama", aliases: ["nama", "name", "uraian", ...extra], required: true, max });
@@ -13,12 +13,12 @@ const name = (extra: string[] = [], max = 300): ImportColumn => ({ key: "name", 
 export const IMPORT_SPECS: Record<string, ImportSpec> = {
   programs: { columns: [code(["kode_program"]), name(["nama_program"])], sample: ["1.01", "Contoh Program"] },
   activities: {
-    columns: [{ key: "parent", label: "kode_program", aliases: ["kode_program", "program"], required: true, max: 40 }, code(["kode_kegiatan"]), name(["nama_kegiatan"])],
-    sample: ["1.01", "1.01.01", "Contoh Kegiatan"],
+    columns: [{ key: "parent", label: "kode_program", aliases: ["kode_program", "program"], max: 40 }, code(["kode_kegiatan"]), name(["nama_kegiatan"])],
+    sample: ["1.01", "1.01.01.2.01", "Contoh Kegiatan"], deriveParentDrop: 2,
   },
   sub_activities: {
-    columns: [{ key: "parent", label: "kode_kegiatan", aliases: ["kode_kegiatan", "kegiatan"], required: true, max: 40 }, code(["kode_sub_kegiatan"]), name(["nama_sub_kegiatan"])],
-    sample: ["1.01.01", "1.01.01.0001", "Contoh Sub Kegiatan"],
+    columns: [{ key: "parent", label: "kode_kegiatan", aliases: ["kode_kegiatan", "kegiatan"], max: 40 }, code(["kode_sub_kegiatan"]), name(["nama_sub_kegiatan"])],
+    sample: ["1.01.01.2.01", "1.01.01.2.01.0001", "Contoh Sub Kegiatan"], deriveParentDrop: 1,
   },
   expenditure_accounts: { columns: [code(["kode_rekening"]), name(["nama_rekening", "uraian_rekening"])], sample: ["5.1.02.01.01.0024", "Belanja Alat/Bahan untuk Kegiatan Kantor"] },
   funding_sources: { columns: [code(["kode_sumber_dana"]), name(["nama_sumber_dana"], 200)], sample: ["1.1.01", "Pendapatan Asli Daerah"] },
@@ -74,6 +74,12 @@ export function parseMasterTable(entity: string, table: string[][]): ParseOutcom
     const get = (k: ImportColumn["key"]) => { const j = idx.get(k); return j === undefined ? "" : (r[j] ?? "").trim(); };
     const out: ParsedRow = { line };
     for (const c of spec.columns) {
+      if (c.key === "parent" && spec.deriveParentDrop && !get("parent")) {
+        const segs = get("code").split(".");
+        const derived = segs.length > spec.deriveParentDrop ? segs.slice(0, segs.length - spec.deriveParentDrop).join(".") : "";
+        if (derived) out.parent = derived; else problems.push(`Baris ${line}: ${c.label} kosong dan tidak dapat diturunkan dari kode "${get("code")}"`);
+        continue;
+      }
       const v = get(c.key);
       if (c.required && !v) { problems.push(`Baris ${line}: ${c.label} kosong`); continue; }
       if (v.length > c.max) { problems.push(`Baris ${line}: ${c.label} melebihi ${c.max} karakter`); continue; }
