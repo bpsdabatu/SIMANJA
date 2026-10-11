@@ -4,9 +4,9 @@ import { greetingFor } from "../src/lib/wib";
 
 describe("impor data master", () => {
   it("memetakan alias kolom dan memvalidasi", () => {
-    const r = parseMasterTable("activities", [["Kode Program", "Kode Kegiatan", "Nama Kegiatan"], ["1.01", "1.01.01", "Keg A"], ["", "1.01.02", "Keg B"]]);
+    const r = parseMasterTable("activities", [["Kode Program", "Kode Kegiatan", "Nama Kegiatan"], ["1.01", "1.01.01", "Keg A"], ["", "1.2", "Keg B"]]);
     expect(r.rows[0]).toMatchObject({ parent: "1.01", code: "1.01.01", name: "Keg A" });
-    expect(r.problems).toEqual(["Baris 3: kode_program kosong"]);
+    expect(r.problems).toEqual(['Baris 3: kode_program kosong dan tidak dapat diturunkan dari kode "1.2"']);
   });
   it("kolom wajib hilang", () => {
     expect(parseMasterTable("programs", [["kode"], ["1"]]).problems[0]).toContain("nama");
@@ -25,5 +25,15 @@ describe("salam WIB", () => {
     expect(greetingFor(new Date("2026-01-01T09:00:00Z"))).toBe("Selamat sore"); // 16 WIB
     expect(greetingFor(new Date("2026-01-01T15:00:00Z"))).toBe("Selamat malam"); // 22 WIB
     expect(greetingFor(new Date("2026-01-01T20:00:00Z"))).toBe("Selamat malam"); // 03 WIB
+  });
+});
+
+describe("turunan kode induk", () => {
+  it("kegiatan -> program, sub kegiatan -> kegiatan bila kolom induk tidak ada", () => {
+    const a = parseMasterTable("activities", [["Kode ", "Nama"], ["4.01.01.2.02", "Adm Keuangan"]]);
+    expect(a.problems).toEqual([]);
+    expect(a.rows[0]!.parent).toBe("4.01.01");
+    const s = parseMasterTable("sub_activities", [["Kode", "Nama"], ["4.01.01.2.02.0002", "Penyediaan"]]);
+    expect(s.rows[0]!.parent).toBe("4.01.01.2.02");
   });
 });
