@@ -19,6 +19,8 @@ const csp = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // pdfkit membaca berkas font standar (AFM) dari node_modules saat runtime; jangan di-bundle.
+  serverExternalPackages: ["pdfkit", "exceljs"],
   async headers() {
     return [
       {
