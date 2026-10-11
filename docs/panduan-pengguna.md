@@ -26,3 +26,26 @@ Menampilkan Total Pagu, Realisasi, Sisa, Persentase, jumlah butir anggaran, tran
 | PPBJ | Mereviu DPP yang ditugaskan dan menerbitkan Berita Acara Reviu |
 
 Menu bertanda **Fase N** belum tersedia. Panduan modul lain akan ditambahkan seiring rilis.
+
+## Pembaruan: unggah/ekspor Excel, tahun anggaran, laporan triwulanan
+
+### Data Master (Admin)
+- **Unggah Excel/CSV**: pilih tab (Program, Kegiatan, Sub Kegiatan, Rekening Belanja, Sumber Dana, Metode, Penyedia, RUP) → *Unggah … dari Excel / CSV*. Unduh **Templat** terlebih dahulu. Urutan unggah: Program → Kegiatan → Sub Kegiatan (kode induk harus sudah ada). Format kolom kode sebagai **Teks** di Excel. Bila ada satu baris bermasalah, seluruh impor dibatalkan. Centang *Perbarui nama…* bila kode yang sudah ada ingin diperbarui; bila tidak, baris itu dilewati.
+- **Tambah / Ubah / Nonaktifkan / Hapus**: Hapus hanya berhasil bila data belum dipakai data lain; jika sudah dipakai gunakan Nonaktifkan.
+- **PPTK**: tab *PPTK* (khusus Admin) mengunggah daftar PPTK (username, nama_lengkap, nip, jabatan). Akun dibuat dengan kata sandi sementara acak yang tampil sekali dan dapat diunduh; wajib diganti saat masuk pertama. Ubah/tangguhkan/atur ulang sandi di *Pengguna & Peran*.
+- **Unduh/Cetak**: tombol Excel, CSV, dan Cetak pada setiap tab.
+
+### Tahun anggaran (Admin)
+*Input Anggaran → Tambah tahun anggaran*: isi tahun → sistem membuat versi **Murni** berstatus draf. Aktifkan versi, lalu pilih konteks lewat tautan **Ganti** di bagian atas. Tahapan **Pergeseran/Perubahan** ditambah lewat *Buat versi baru* (dapat menyalin pagu dari versi sebelumnya).
+
+### Input Anggaran
+Referensi diambil dari Data Master; pengguna tinggal memilih dan mengisi pagu per tahun/tahapan. Tambah butir, **Ubah** (pagu, PPTK, rincian), **Hapus butir** (tidak bisa bila sudah ada transaksi), impor Excel/CSV, unduh Excel/CSV, dan cetak.
+
+### Anggaran Kas
+Disusun dari butir Input Anggaran. PPTK dapat mengisi per butir atau **unggah Excel** (templat sudah berisi butir penugasannya), **Hapus draf**, mengajukan; unduh Excel/CSV (dengan total triwulan) dan cetak.
+
+### Laporan Triwulanan
+Menu *Laporan Triwulanan*: pilih triwulan dan (opsional) PPTK → **Unduh Presentasi (PPTX)** atau **Unduh PDF**. Berisi ringkasan, grafik, tabel per Program/Kegiatan/Sub Kegiatan dan per PPTK, analisis singkat, rekomendasi, dan catatan metodologi. Realisasi = SP2D bertanggal; capaian fisik belum tercatat di sistem.
+
+### Jam & salam
+Jam digital WIB tampil di bar atas; salam tampil saat masuk dan saat kembali ke aplikasi setelah ≥ 5 menit. Seluruh tampilan memakai font Arial.

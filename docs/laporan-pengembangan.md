@@ -35,3 +35,10 @@ Semua penulisan data memakai fungsi database `SECURITY INVOKER` (migrasi 0006) s
 - Aturan "total anggaran kas harus sama dengan pagu" tidak dipaksakan (hanya tidak boleh melebihi pagu); sesuaikan bila diperlukan.
 - Realisasi diverifikasi oleh peran dengan izin `realization.verify` (bawaan: Admin); ubah di matriks izin bila perlu.
 - Kode keamanan adalah penghalang otomatisasi sederhana; bukan pengganti kata sandi kuat dan throttling.
+
+## Perubahan: impor/ekspor Excel, CRUD terkendali, laporan triwulanan
+- Migrasi **0007** (aditif): fungsi `delete_master_row`, `update_budget_item`, `delete_budget_item`, `delete_cash_plan`. Kebijakan RLS lama tidak berubah (DELETE langsung pada master tetap ditolak).
+- Pustaka baru: `exceljs` (baca/tulis .xlsx), `pdfkit` (PDF), `pptxgenjs` (PPTX). `next.config.ts`: `serverExternalPackages` untuk pdfkit/exceljs.
+- Modul baru: `lib/spreadsheet`, `lib/master-import`, `lib/budget-items`, `lib/quarterly-core|quarterly|quarterly-pdf|quarterly-pptx`, `lib/wib`, `components/clock-greeting`, halaman `/laporan-triwulan`.
+- Font Arial menggantikan Inter/Montserrat. Menu baru memakai izin `recap.view`/`recap.export` (tanpa izin baru).
+- **Belum diuji** terhadap Supabase nyata: terapkan 0007 pada staging dan jalankan `npm run test:db` sebelum produksi.
