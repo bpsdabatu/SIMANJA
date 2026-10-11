@@ -5,10 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarClock, ChevronDown, Database, FileBarChart, Files, KeyRound, LayoutDashboard, LogOut, Menu,
-  PanelLeftClose, PanelLeftOpen, Receipt, ScrollText, TableProperties, Users, Wallet, X,
+  PanelLeftClose, PanelLeftOpen, Presentation, Receipt, ScrollText, TableProperties, Users, Wallet, X,
   type LucideIcon,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions";
+import { DigitalClock, GreetingBanner, resetGreeting } from "@/components/clock-greeting";
 import { LogoBadge } from "@/components/brand/logo";
 import type { IconName, NavItem } from "@/lib/nav";
 import { APP_NAME } from "@/lib/brand";
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
 const ICONS: Record<IconName, LucideIcon> = {
   "layout-dashboard": LayoutDashboard, wallet: Wallet, "calendar-clock": CalendarClock, receipt: Receipt,
   "table-properties": TableProperties, "file-bar-chart": FileBarChart, files: Files, database: Database,
-  users: Users, "scroll-text": ScrollText,
+  users: Users, "scroll-text": ScrollText, presentation: Presentation,
 };
 
 interface Props {
@@ -168,6 +169,8 @@ export function AppShell({ user, context, items, children }: Props) {
             </Link>
           </div>
 
+          <DigitalClock />
+
           <details className="group relative">
             <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-slate-100 [&::-webkit-details-marker]:hidden">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-700 text-xs font-bold text-white">
@@ -187,7 +190,7 @@ export function AppShell({ user, context, items, children }: Props) {
               <Link href="/ganti-password" className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
                 <KeyRound size={16} aria-hidden /> Ganti kata sandi
               </Link>
-              <form action={logoutAction}>
+              <form action={logoutAction} onSubmit={resetGreeting}>
                 <button className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-red-700 hover:bg-red-50">
                   <LogOut size={16} aria-hidden /> Keluar
                 </button>
@@ -196,6 +199,7 @@ export function AppShell({ user, context, items, children }: Props) {
           </details>
         </header>
 
+        <GreetingBanner name={user.fullName} />
         <main id="konten" className="flex-1 px-4 py-6 sm:px-8 sm:py-8">{children}</main>
 
         <footer data-noprint className="border-t border-slate-200 bg-white px-6 py-4 text-xs text-slate-500">

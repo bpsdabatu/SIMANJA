@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Download, Plus, Upload } from "lucide-react";
+import { Download, FileSpreadsheet, Plus, Upload } from "lucide-react";
 import { requireModule } from "@/lib/auth/guard";
 import { userClient } from "@/lib/supabase/server";
-import { loadBudgetLookups } from "@/lib/lookups";
+import { getOrganizationName, loadBudgetLookups } from "@/lib/lookups";
 import { fetchAll } from "@/lib/fetch-all";
 import { STAGES, STAGE_LABEL, type Stage } from "@/lib/auth/context";
 import { formatRupiah } from "@/lib/format";
@@ -11,9 +11,11 @@ import { Badge, Card, CardHeader } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { EmptyState, Flash, PageHeader, TableWrap } from "@/components/ui/page";
-import { ConfirmSubmit, SubmitButton } from "@/components/ui/submit-button";
+import { ConfirmSubmit, PrintButton, SubmitButton } from "@/components/ui/submit-button";
+import { PrintFooter, PrintHeader, SignatureBlock } from "@/components/ui/report";
 import {
-  addItemAction, assignPptkAction, createVersionAction, importCsvAction, setVersionStatusAction, updatePaguAction,
+  addFiscalYearAction, addItemAction, assignPptkAction, createVersionAction, deleteItemAction, importCsvAction,
+  setVersionStatusAction, updateItemDetailAction, updatePaguAction,
 } from "./actions";
 
 export const metadata: Metadata = { title: "Input Anggaran" };
@@ -29,6 +31,7 @@ interface ItemRow {
   adjustment_note: string | null;
   budget_items: {
     id: string; description: string | null; pptk_id: string | null;
+    sub_activity_id: string; expenditure_account_id: string; funding_source_id: string;
     sub_activities: { code: string; name: string } | null;
     expenditure_accounts: { code: string; name: string } | null;
     funding_sources: { code: string; name: string } | null;
@@ -47,13 +50,14 @@ export default async function AnggaranPage({ searchParams }: { searchParams: Pro
   const canImport = user.permissions.has("budget.import");
   const supabase = await userClient();
 
-  const [{ data: versionsRaw }, itemsRes, lookups] = await Promise.all([
+  const [{ data: versionsRaw }, itemsRes, lookups, org] = await Promise.all([
     supabase.from("budget_versions").select("id, stage_code, version_no, status, note, created_at, fiscal_years(year)")
       .order("created_at", { ascending: false }).limit(60),
     fetchAll<ItemRow>((from, to) => supabase.from("budget_item_versions")
-      .select("budget_item_id, pagu, adjustment_note, budget_items(id, description, pptk_id, sub_activities(code,name), expenditure_accounts(code,name), funding_sources(code,name), pptk:profiles!budget_items_pptk_id_fkey(full_name))")
+      .select("budget_item_id, pagu, adjustment_note, budget_items(id, description, pptk_id, sub_activity_id, expenditure_account_id, funding_source_id, sub_activities(code,name), expenditure_accounts(code,name), funding_sources(code,name), pptk:profiles!budget_items_pptk_id_fkey(full_name))")
       .eq("budget_version_id", context.versionId).order("budget_item_id").range(from, to)),
     canEdit ? loadBudgetLookups(supabase) : Promise.resolve(null),
+    getOrganizationName(supabase, user.organizationId),
   ]);
 
   const versions = (versionsRaw ?? []) as unknown as VersionRow[];
@@ -88,17 +92,39 @@ export default async function AnggaranPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
+      <PrintHeader orgName={org} title="Input Anggaran" subtitle={`Tahun Anggaran ${context.year} — ${STAGE_LABEL[context.stage]}${current ? ` v${current.version_no}` : ""}`} />
       <PageHeader
         eyebrow={`TA ${context.year} · ${STAGE_LABEL[context.stage]}`}
         title="Input Anggaran"
-        description="Pagu per butir anggaran pada versi yang sedang dibuka. Versi final tidak dapat diubah; gunakan versi tahapan berikutnya untuk perubahan."
-        actions={canImport && editable ? (
-          <Link href="/anggaran/template" className={buttonVariants({ variant: "outline" })}><Download size={16} aria-hidden /> Templat CSV</Link>
-        ) : undefined}
+        description="Pagu per butir anggaran pada versi yang sedang dibuka, memakai referensi dari Data Master. Versi final tidak dapat diubah; gunakan versi tahapan berikutnya untuk perubahan."
+        actions={<>
+          {canImport && editable && (
+            <a href="/anggaran/template?format=xlsx" className={buttonVariants({ variant: "outline" })}><FileSpreadsheet size={16} aria-hidden /> Templat Excel</a>
+          )}
+          <a href={`/anggaran/export?format=xlsx&q=${encodeURIComponent(sp.q ?? "")}`} className={buttonVariants({ variant: "outline" })}><Download size={16} aria-hidden /> Excel</a>
+          <a href={`/anggaran/export?format=csv&q=${encodeURIComponent(sp.q ?? "")}`} className={buttonVariants({ variant: "outline" })}><Download size={16} aria-hidden /> CSV</a>
+          <PrintButton />
+        </>}
       />
       <Flash ok={sp.ok} err={sp.err} />
 
-      <Card>
+      {canEdit && (
+        <Card className="no-print">
+          <details>
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-sm font-semibold text-navy-800 [&::-webkit-details-marker]:hidden"><Plus size={16} aria-hidden /> Tambah tahun anggaran</summary>
+            <form action={addFiscalYearAction} className="grid gap-4 border-t border-slate-100 p-5 sm:grid-cols-4">
+              <Field label="Tahun anggaran" htmlFor="fy-year" hint={`Sudah ada: ${[...new Set(versions.map((v) => v.fiscal_years?.year).filter(Boolean))].sort().join(", ") || "belum ada"}`}>
+                <Input id="fy-year" name="year" type="number" min={2000} max={2100} required defaultValue={context.year + 1} />
+              </Field>
+              <Field label="Catatan" htmlFor="fy-note" className="sm:col-span-2"><Input id="fy-note" name="note" maxLength={300} placeholder="mis. APBD Murni" /></Field>
+              <div className="flex items-end"><SubmitButton pendingText="Menambah...">Tambah tahun</SubmitButton></div>
+              <p className="text-xs text-slate-500 sm:col-span-4">Tahun baru dibuat bersama versi tahapan Murni berstatus draf. Tahapan Pergeseran/Perubahan ditambahkan lewat &ldquo;Buat versi baru&rdquo; di bawah.</p>
+            </form>
+          </details>
+        </Card>
+      )}
+
+      <Card className="no-print">
         <CardHeader
           title="Versi anggaran"
           description={current ? `Sedang dibuka: ${STAGE_LABEL[current.stage_code]} v${current.version_no} — ${STATUS_LABEL[current.status]}` : undefined}
@@ -160,7 +186,7 @@ export default async function AnggaranPage({ searchParams }: { searchParams: Pro
       </Card>
 
       {editable && lookups && (
-        <Card>
+        <Card className="no-print">
           <details>
             <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-sm font-semibold text-navy-800 [&::-webkit-details-marker]:hidden"><Plus size={16} aria-hidden /> Tambah butir anggaran</summary>
             <form action={addItemAction} className="grid gap-4 border-t border-slate-100 p-5 sm:grid-cols-2">
@@ -179,14 +205,14 @@ export default async function AnggaranPage({ searchParams }: { searchParams: Pro
           </details>
           {canImport && (
             <details className="border-t border-slate-100">
-              <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-sm font-semibold text-navy-800 [&::-webkit-details-marker]:hidden"><Upload size={16} aria-hidden /> Impor dari CSV</summary>
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-sm font-semibold text-navy-800 [&::-webkit-details-marker]:hidden"><Upload size={16} aria-hidden /> Impor dari Excel / CSV</summary>
               <form action={importCsvAction} encType="multipart/form-data" className="space-y-4 p-5">
                 <input type="hidden" name="versionId" value={context.versionId} />
                 <p className="text-sm text-slate-600">
-                  Kolom: <code className="rounded bg-slate-100 px-1">kode_sub_kegiatan; kode_rekening; kode_sumber_dana; username_pptk; uraian; pagu</code>. Semua kode harus sudah ada di Data Master.
+                  Kolom: <code className="rounded bg-slate-100 px-1">kode_sub_kegiatan; kode_rekening; kode_sumber_dana; username_pptk; uraian; pagu</code>. Semua kode harus sudah ada di Data Master (format kolom kode sebagai Teks di Excel agar angka nol/titik tidak berubah).
                   Bila ada satu baris bermasalah, impor dibatalkan seluruhnya dan tidak ada yang tersimpan.
                 </p>
-                <Field label="Berkas CSV" htmlFor="file"><Input id="file" name="file" type="file" accept=".csv,text/csv,.txt" className="h-auto py-2" /></Field>
+                <Field label="Berkas Excel (.xlsx) atau CSV" htmlFor="file"><Input id="file" name="file" type="file" accept=".xlsx,.csv,text/csv,.txt" className="h-auto py-2" /></Field>
                 <Field label="atau tempel isi CSV" htmlFor="csv"><Textarea id="csv" name="csv" rows={4} className="font-mono text-xs" /></Field>
                 <SubmitButton variant="accent" pendingText="Mengimpor...">Impor</SubmitButton>
               </form>
@@ -200,7 +226,7 @@ export default async function AnggaranPage({ searchParams }: { searchParams: Pro
           title={`Butir anggaran (${items.length})`}
           description={`Total pagu versi ini: ${formatRupiah(total)}`}
           actions={
-            <form action="/anggaran" className="flex gap-2">
+            <form action="/anggaran" className="no-print flex gap-2">
               <Input name="q" defaultValue={sp.q ?? ""} placeholder="Cari kode / uraian / PPTK" aria-label="Cari" className="h-9 w-56" />
               <button className={buttonVariants({ variant: "outline", size: "sm" }) + " h-9"}>Cari</button>
             </form>
@@ -211,7 +237,7 @@ export default async function AnggaranPage({ searchParams }: { searchParams: Pro
           : (
           <TableWrap>
             <table className="table-base">
-              <thead><tr><th>Sub kegiatan</th><th>Rekening</th><th>Sumber dana</th><th>PPTK</th><th className="text-right">Pagu</th>{editable && <th className="text-right">Aksi</th>}</tr></thead>
+              <thead><tr><th>Sub kegiatan</th><th>Rekening</th><th>Sumber dana</th><th>PPTK</th><th className="text-right">Pagu</th>{editable && <th className="no-print text-right">Aksi</th>}</tr></thead>
               <tbody>
                 {items.map((r) => {
                   const b = r.budget_items!;
@@ -223,7 +249,7 @@ export default async function AnggaranPage({ searchParams }: { searchParams: Pro
                       <td>{b.pptk?.full_name ?? <Badge tone="amber">Belum ditugaskan</Badge>}</td>
                       <td className="num font-medium">{formatRupiah(r.pagu)}{r.adjustment_note && <span className="block text-xs font-normal text-slate-500">{r.adjustment_note}</span>}</td>
                       {editable && (
-                        <td className="text-right">
+                        <td className="no-print text-right">
                           <details className="relative text-left">
                             <summary className="ml-auto inline-flex h-8 cursor-pointer list-none items-center rounded-lg bg-navy-50 px-3 text-xs font-semibold text-navy-700 hover:bg-navy-100 [&::-webkit-details-marker]:hidden">Ubah</summary>
                             <div className="absolute right-0 z-20 mt-2 w-[min(92vw,22rem)] space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-lift">
@@ -245,6 +271,26 @@ export default async function AnggaranPage({ searchParams }: { searchParams: Pro
                                   <SubmitButton size="sm" variant="outline">Simpan penugasan</SubmitButton>
                                 </form>
                               )}
+                              {lookups && (
+                                <form action={updateItemDetailAction} className="space-y-3 border-t border-slate-100 pt-3">
+                                  <input type="hidden" name="versionId" value={context.versionId} /><input type="hidden" name="itemId" value={r.budget_item_id} />
+                                  <Field label="Sub kegiatan" htmlFor={`s-${r.budget_item_id}`}>
+                                    <Select id={`s-${r.budget_item_id}`} name="subActivity" required defaultValue={b.sub_activity_id}>{lookups.subActivities.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select>
+                                  </Field>
+                                  <Field label="Rekening belanja" htmlFor={`a-${r.budget_item_id}`}>
+                                    <Select id={`a-${r.budget_item_id}`} name="account" required defaultValue={b.expenditure_account_id}>{lookups.accounts.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select>
+                                  </Field>
+                                  <Field label="Sumber dana" htmlFor={`f-${r.budget_item_id}`}>
+                                    <Select id={`f-${r.budget_item_id}`} name="funding" required defaultValue={b.funding_source_id}>{lookups.funding.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</Select>
+                                  </Field>
+                                  <Field label="Uraian" htmlFor={`d-${r.budget_item_id}`}><Input id={`d-${r.budget_item_id}`} name="description" maxLength={500} defaultValue={b.description ?? ""} /></Field>
+                                  <SubmitButton size="sm" variant="outline">Simpan rincian</SubmitButton>
+                                </form>
+                              )}
+                              <form action={deleteItemAction} className="border-t border-slate-100 pt-3">
+                                <input type="hidden" name="versionId" value={context.versionId} /><input type="hidden" name="itemId" value={r.budget_item_id} />
+                                <ConfirmSubmit size="sm" variant="danger" message="Hapus butir anggaran ini dari versi yang sedang dibuka? Draf anggaran kas butir ini ikut terhapus. Tidak bisa dihapus bila sudah ada transaksi realisasi.">Hapus butir</ConfirmSubmit>
+                              </form>
                             </div>
                           </details>
                         </td>
@@ -258,6 +304,8 @@ export default async function AnggaranPage({ searchParams }: { searchParams: Pro
           </TableWrap>
         )}
       </Card>
+      <SignatureBlock />
+      <PrintFooter />
     </div>
   );
 }

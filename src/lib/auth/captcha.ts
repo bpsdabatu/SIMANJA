@@ -48,7 +48,7 @@ export function renderCaptchaSvg(code: string): string {
     const y = 36 + randomInt(8) - 4;
     const rot = randomInt(41) - 20;
     const size = 26 + randomInt(6);
-    body += `<text x="${x.toFixed(1)}" y="${y}" font-family="Montserrat, Arial, sans-serif" font-weight="800" font-size="${size}" fill="${colors[randomInt(colors.length)]}" transform="rotate(${rot} ${x.toFixed(1)} ${y})">${ch}</text>`;
+    body += `<text x="${x.toFixed(1)}" y="${y}" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="${size}" fill="${colors[randomInt(colors.length)]}" transform="rotate(${rot} ${x.toFixed(1)} ${y})">${ch}</text>`;
   });
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${body}</svg>`;
 }

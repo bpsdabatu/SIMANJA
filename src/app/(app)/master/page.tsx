@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Download, FileSpreadsheet, Plus, Upload } from "lucide-react";
 import { requireModule } from "@/lib/auth/guard";
 import { userClient } from "@/lib/supabase/server";
 import { MASTER, MASTER_KEYS, type MasterEntity } from "@/lib/master-config";
+import { IMPORT_SPECS } from "@/lib/master-import";
 import { Badge, Card, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { EmptyState, Flash, PageHeader, TableWrap } from "@/components/ui/page";
-import { SubmitButton } from "@/components/ui/submit-button";
+import { ConfirmSubmit, PrintButton, SubmitButton } from "@/components/ui/submit-button";
+import { PrintFooter, PrintHeader } from "@/components/ui/report";
+import { getOrganizationName } from "@/lib/lookups";
+import { PptkImportForm } from "./pptk-import-form";
 import { cn } from "@/lib/utils";
-import { saveMasterAction, toggleMasterAction } from "./actions";
+import { deleteMasterAction, importMasterAction, saveMasterAction, toggleMasterAction } from "./actions";
 
 export const metadata: Metadata = { title: "Data Master" };
 export const dynamic = "force-dynamic";
@@ -57,10 +61,15 @@ function FieldInputs({ cfg, parents, row }: { cfg: MasterEntity; parents: Parent
 export default async function MasterPage({ searchParams }: { searchParams: Promise<{ tab?: string; ok?: string; err?: string; q?: string }> }) {
   const { user } = await requireModule("master.view");
   const sp = await searchParams;
-  const tab = sp.tab && MASTER[sp.tab] ? sp.tab : "programs";
+  const canUsers = user.permissions.has("users.manage");
+  const isPptk = sp.tab === "pptk" && canUsers;
+  const tab = isPptk ? "programs" : sp.tab && MASTER[sp.tab] ? sp.tab : "programs";
   const cfg = MASTER[tab]!;
   const canManage = user.permissions.has("master.manage");
   const supabase = await userClient();
+  const org = await getOrganizationName(supabase, user.organizationId);
+
+  if (isPptk) return <PptkTab sp={sp} org={org} />;
 
   const q = (sp.q ?? "").trim().slice(0, 60);
   let query = supabase.from(cfg.table).select("*").order(cfg.orderBy).limit(500);
@@ -75,21 +84,50 @@ export default async function MasterPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <PageHeader eyebrow="Administrasi" title="Data Master" description="Referensi klasifikasi anggaran dan pengadaan. Data tidak dihapus; gunakan nonaktifkan agar riwayat tetap utuh." />
+      <PrintHeader orgName={org} title={`Data Master — ${cfg.label}`} subtitle="Referensi klasifikasi anggaran dan pengadaan" />
+      <PageHeader
+        eyebrow="Administrasi"
+        title="Data Master"
+        description="Referensi klasifikasi anggaran dan pengadaan. Unggah massal dari Excel/CSV, tambah, ubah, hapus (bila belum dipakai), atau nonaktifkan agar riwayat tetap utuh."
+        actions={<>
+          <a href={`/master/export?tab=${tab}&format=xlsx`} className={buttonVariants({ variant: "outline" })}><Download size={16} aria-hidden /> Excel</a>
+          <a href={`/master/export?tab=${tab}&format=csv`} className={buttonVariants({ variant: "outline" })}><Download size={16} aria-hidden /> CSV</a>
+          <PrintButton />
+        </>}
+      />
       <Flash ok={sp.ok} err={sp.err} />
 
-      <nav aria-label="Jenis master" className="flex flex-wrap gap-2">
-        {MASTER_KEYS.map((k) => (
-          <Link key={k} href={`/master?tab=${k}`} aria-current={k === tab ? "page" : undefined}
-            className={cn("rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
-              k === tab ? "bg-navy-700 text-white shadow-sm" : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-navy-50")}>
-            {MASTER[k]!.label}
-          </Link>
-        ))}
-      </nav>
+      <MasterTabs tab={tab} canUsers={canUsers} />
+
+      {canManage && IMPORT_SPECS[tab] && (
+        <Card className="no-print">
+          <details>
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-sm font-semibold text-navy-800 [&::-webkit-details-marker]:hidden">
+              <Upload size={16} aria-hidden /> Unggah {cfg.label} dari Excel / CSV
+            </summary>
+            <form action={importMasterAction} encType="multipart/form-data" className="space-y-4 border-t border-slate-100 p-5">
+              <input type="hidden" name="entity" value={tab} />
+              <p className="text-sm text-slate-600">
+                Kolom: <code className="rounded bg-slate-100 px-1">{IMPORT_SPECS[tab]!.columns.map((c) => c.label).join("; ")}</code>.
+                {cfg.parent ? ` Kode ${cfg.parent.label.toLowerCase()} harus sudah ada di Data Master.` : ""} Bila ada satu baris bermasalah, impor dibatalkan seluruhnya.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <a href={`/master/template?tab=${tab}&format=xlsx`} className={buttonVariants({ variant: "outline", size: "sm" })}><FileSpreadsheet size={14} aria-hidden /> Templat Excel</a>
+                <a href={`/master/template?tab=${tab}&format=csv`} className={buttonVariants({ variant: "outline", size: "sm" })}><FileSpreadsheet size={14} aria-hidden /> Templat CSV</a>
+              </div>
+              <Field label="Berkas Excel (.xlsx) atau CSV" htmlFor="master-file"><Input id="master-file" name="file" type="file" accept=".xlsx,.csv,.txt" required className="h-auto py-2" /></Field>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" name="updateExisting" value="true" className="h-4 w-4 rounded border-slate-300" />
+                Perbarui nama/uraian bila kode sudah ada (bila tidak dicentang, baris dengan kode yang sudah ada dilewati)
+              </label>
+              <SubmitButton variant="accent" pendingText="Mengimpor...">Unggah</SubmitButton>
+            </form>
+          </details>
+        </Card>
+      )}
 
       {canManage && (
-        <Card>
+        <Card className="no-print">
           <details>
             <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-sm font-semibold text-navy-800 [&::-webkit-details-marker]:hidden">
               <Plus size={16} aria-hidden /> Tambah {cfg.label}
@@ -107,7 +145,7 @@ export default async function MasterPage({ searchParams }: { searchParams: Promi
         <CardHeader
           title={`${cfg.label} (${rows.length}${rows.length === 500 ? "+" : ""})`}
           actions={
-            <form className="flex gap-2" action="/master">
+            <form className="no-print flex gap-2" action="/master">
               <input type="hidden" name="tab" value={tab} />
               <Input name="q" defaultValue={q} placeholder="Cari..." aria-label="Cari" className="h-9 w-48" />
               <Button type="submit" variant="outline" size="sm" className="h-9">Cari</Button>
@@ -124,7 +162,7 @@ export default async function MasterPage({ searchParams }: { searchParams: Promi
                   {cfg.parent && <th>{cfg.parent.label}</th>}
                   {cfg.fields.map((f) => <th key={f.key}>{f.label}</th>)}
                   <th>Status</th>
-                  {canManage && <th className="text-right">Aksi</th>}
+                  {canManage && <th className="no-print text-right">Aksi</th>}
                 </tr>
               </thead>
               <tbody>
@@ -134,7 +172,7 @@ export default async function MasterPage({ searchParams }: { searchParams: Promi
                     {cfg.fields.map((f) => <td key={f.key} className={f.mono ? "font-mono text-[13px]" : undefined}>{(r[f.key] as string) || "—"}</td>)}
                     <td><Badge tone={r.is_active === false ? "slate" : "green"}>{r.is_active === false ? "Nonaktif" : "Aktif"}</Badge></td>
                     {canManage && (
-                      <td className="text-right">
+                      <td className="no-print text-right">
                         <div className="flex flex-wrap justify-end gap-2">
                           <details className="relative text-left">
                             <summary className="inline-flex h-8 cursor-pointer list-none items-center rounded-lg bg-navy-50 px-3 text-xs font-semibold text-navy-700 hover:bg-navy-100 [&::-webkit-details-marker]:hidden">Ubah</summary>
@@ -151,6 +189,11 @@ export default async function MasterPage({ searchParams }: { searchParams: Promi
                             <input type="hidden" name="active" value={r.is_active === false ? "true" : "false"} />
                             <SubmitButton size="sm" variant="outline">{r.is_active === false ? "Aktifkan" : "Nonaktifkan"}</SubmitButton>
                           </form>
+                          <form action={deleteMasterAction}>
+                            <input type="hidden" name="entity" value={tab} />
+                            <input type="hidden" name="id" value={r.id} />
+                            <ConfirmSubmit size="sm" variant="danger" message={`Hapus ${cfg.label.toLowerCase()} ini? Penghapusan hanya berhasil bila data belum dipakai data lain; bila sudah dipakai, gunakan Nonaktifkan.`}>Hapus</ConfirmSubmit>
+                          </form>
                         </div>
                       </td>
                     )}
@@ -161,6 +204,73 @@ export default async function MasterPage({ searchParams }: { searchParams: Promi
           </TableWrap>
         )}
       </Card>
+      <PrintFooter />
+    </div>
+  );
+}
+
+function MasterTabs({ tab, canUsers }: { tab: string; canUsers: boolean }) {
+  return (
+    <nav aria-label="Jenis master" className="no-print flex flex-wrap gap-2">
+      {[...MASTER_KEYS, ...(canUsers ? ["pptk"] : [])].map((k) => (
+        <Link key={k} href={`/master?tab=${k}`} aria-current={k === tab ? "page" : undefined}
+          className={cn("rounded-full px-4 py-1.5 text-sm font-medium transition-colors",
+            k === tab ? "bg-navy-700 text-white shadow-sm" : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-navy-50")}>
+          {k === "pptk" ? "PPTK" : MASTER[k]!.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+interface PptkRow { username: string; full_name: string; nip: string | null; position_title: string | null; status: string }
+
+async function PptkTab({ sp, org }: { sp: { ok?: string; err?: string }; org: string }) {
+  const supabase = await userClient();
+  const { data, error } = await supabase.from("user_roles").select("profiles!inner(username, full_name, nip, position_title, status)").eq("role_code", "pptk").limit(5000);
+  const rows = (data ?? []).map((r) => (Array.isArray(r.profiles) ? r.profiles[0] : r.profiles) as unknown as PptkRow).filter(Boolean)
+    .sort((a, b) => a.full_name.localeCompare(b.full_name, "id"));
+  return (
+    <div className="mx-auto max-w-7xl space-y-6">
+      <PrintHeader orgName={org} title="Data Master — PPTK" subtitle="Pejabat Pelaksana Teknis Kegiatan" />
+      <PageHeader
+        eyebrow="Administrasi"
+        title="Data Master"
+        description="PPTK adalah akun pengguna berperan PPTK. Unggah daftar dari Excel/CSV untuk membuat akun sekaligus; ubah, tangguhkan, atau atur ulang kata sandi melalui Pengguna & Peran."
+        actions={<>
+          <a href="/master/export?tab=pptk&format=xlsx" className={buttonVariants({ variant: "outline" })}><Download size={16} aria-hidden /> Excel</a>
+          <a href="/master/export?tab=pptk&format=csv" className={buttonVariants({ variant: "outline" })}><Download size={16} aria-hidden /> CSV</a>
+          <PrintButton />
+        </>}
+      />
+      <Flash ok={sp.ok} err={sp.err} />
+      <MasterTabs tab="pptk" canUsers />
+      <Card className="no-print">
+        <CardHeader title="Unggah PPTK dari Excel / CSV" actions={<>
+          <a href="/master/template?tab=pptk&format=xlsx" className={buttonVariants({ variant: "outline", size: "sm" })}><FileSpreadsheet size={14} aria-hidden /> Templat Excel</a>
+          <a href="/master/template?tab=pptk&format=csv" className={buttonVariants({ variant: "outline", size: "sm" })}><FileSpreadsheet size={14} aria-hidden /> Templat CSV</a>
+          <Link href="/pengguna" className={buttonVariants({ variant: "soft", size: "sm" })}>Kelola di Pengguna &amp; Peran</Link>
+        </>} />
+        <div className="p-5"><PptkImportForm /></div>
+      </Card>
+      <Card>
+        <CardHeader title={`PPTK (${rows.length})`} />
+        {error ? <EmptyState title="Data tidak dapat dimuat">Muat ulang halaman atau hubungi administrator.</EmptyState>
+          : rows.length === 0 ? <EmptyState title="Belum ada PPTK">Unggah daftar PPTK di atas atau buat akun di Pengguna &amp; Peran.</EmptyState>
+          : (
+          <TableWrap>
+            <table className="table-base">
+              <thead><tr><th>Username</th><th>Nama lengkap</th><th>NIP</th><th>Jabatan</th><th>Status</th></tr></thead>
+              <tbody>{rows.map((r) => (
+                <tr key={r.username} className={r.status !== "active" ? "opacity-60" : undefined}>
+                  <td>@{r.username}</td><td>{r.full_name}</td><td>{r.nip || "—"}</td><td>{r.position_title || "—"}</td>
+                  <td><Badge tone={r.status === "active" ? "green" : "slate"}>{r.status === "active" ? "Aktif" : "Nonaktif"}</Badge></td>
+                </tr>))}</tbody>
+            </table>
+          </TableWrap>
+        )}
+      </Card>
+      <PrintFooter />
     </div>
   );
 }

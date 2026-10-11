@@ -3,12 +3,16 @@ import { requireModule } from "@/lib/auth/guard";
 import { userClient } from "@/lib/supabase/server";
 import { fetchAll } from "@/lib/fetch-all";
 import { STAGE_LABEL } from "@/lib/auth/context";
+import { getOrganizationName } from "@/lib/lookups";
 import { formatRupiah } from "@/lib/format";
 import { Badge, Card, CardHeader } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Download, FileSpreadsheet, Upload } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/input";
 import { EmptyState, Flash, PageHeader } from "@/components/ui/page";
-import { ConfirmSubmit, SubmitButton } from "@/components/ui/submit-button";
-import { cashStatusAction, saveCashPlanAction } from "./actions";
+import { ConfirmSubmit, PrintButton, SubmitButton } from "@/components/ui/submit-button";
+import { PrintFooter, PrintHeader, SignatureBlock } from "@/components/ui/report";
+import { cashStatusAction, deleteCashPlanAction, importCashPlansAction, saveCashPlanAction } from "./actions";
 
 export const metadata: Metadata = { title: "Anggaran Kas" };
 export const dynamic = "force-dynamic";
@@ -28,18 +32,19 @@ interface ItemRow {
     pptk: { full_name: string } | null;
   } | null;
 }
-interface PlanRow { id: string; budget_item_id: string; status: St; revision_no: number; change_reason: string | null; cash_budget_periods: { period_no: number; amount: string | number }[] }
+interface PlanRow { id: string; budget_item_id: string; status: St; revision_no: number; change_reason: string | null; cash_budget_periods: { period_no: number; period_type?: string; amount: string | number }[] }
 
 export default async function AnggaranKasPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string }> }) {
   const { user, context } = await requireModule("cashplan.view");
   const sp = await searchParams;
   const supabase = await userClient();
-  const [itemsRes, plansRes] = await Promise.all([
+  const [itemsRes, plansRes, org] = await Promise.all([
     fetchAll<ItemRow>((from, to) => supabase.from("budget_item_versions")
       .select("budget_item_id, pagu, budget_items(id, description, pptk_id, sub_activities(code,name), expenditure_accounts(code,name), pptk:profiles!budget_items_pptk_id_fkey(full_name))")
       .eq("budget_version_id", context.versionId).order("budget_item_id").range(from, to)),
     fetchAll<PlanRow>((from, to) => supabase.from("cash_budget_plans").select("id, budget_item_id, status, revision_no, change_reason, cash_budget_periods(period_no, amount)")
       .eq("budget_version_id", context.versionId).order("id").range(from, to)),
+    getOrganizationName(supabase, user.organizationId),
   ]);
   const error = itemsRes.error;
   const items = itemsRes.rows.filter((r) => r.budget_items)
@@ -54,14 +59,38 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
+      <PrintHeader orgName={org} title="Anggaran Kas" subtitle={`Tahun Anggaran ${context.year} — ${STAGE_LABEL[context.stage]}`} />
       <PageHeader
         eyebrow={`TA ${context.year} · ${STAGE_LABEL[context.stage]}`}
         title="Anggaran Kas"
-        description="Rencana penarikan kas bulanan per butir anggaran. PPTK menyusun dan mengajukan; pejabat berwenang mengembalikan atau memfinalisasi. Total kas tidak boleh melebihi pagu."
+        description="Rencana penarikan kas bulanan per butir, disusun dari data Input Anggaran. PPTK menyusun dan mengajukan; pejabat berwenang mengembalikan atau memfinalisasi. Total kas tidak boleh melebihi pagu."
+        actions={<>
+          <a href="/anggaran-kas/export?format=xlsx" className={buttonVariants({ variant: "outline" })}><Download size={16} aria-hidden /> Excel</a>
+          <a href="/anggaran-kas/export?format=csv" className={buttonVariants({ variant: "outline" })}><Download size={16} aria-hidden /> CSV</a>
+          <PrintButton />
+        </>}
       />
       <Flash ok={sp.ok} err={sp.err} />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      {canEdit && (
+        <Card className="no-print">
+          <details>
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-sm font-semibold text-navy-800 [&::-webkit-details-marker]:hidden"><Upload size={16} aria-hidden /> Isi Anggaran Kas dari Excel / CSV</summary>
+            <form action={importCashPlansAction} encType="multipart/form-data" className="space-y-4 border-t border-slate-100 p-5">
+              <input type="hidden" name="versionId" value={context.versionId} />
+              <p className="text-sm text-slate-600">Unduh templat (sudah berisi butir Input Anggaran yang ditugaskan kepada Anda), isi nominal Jan–Des, lalu unggah. Hasil tersimpan sebagai <b>draf</b>; periksa lalu ajukan. Total per butir tidak boleh melebihi pagu.</p>
+              <div className="flex flex-wrap gap-2">
+                <a href="/anggaran-kas/template?format=xlsx" className={buttonVariants({ variant: "outline", size: "sm" })}><FileSpreadsheet size={14} aria-hidden /> Templat Excel</a>
+                <a href="/anggaran-kas/template?format=csv" className={buttonVariants({ variant: "outline", size: "sm" })}><FileSpreadsheet size={14} aria-hidden /> Templat CSV</a>
+              </div>
+              <Field label="Berkas Excel (.xlsx) atau CSV" htmlFor="kas-file"><Input id="kas-file" name="file" type="file" accept=".xlsx,.csv,.txt" required className="h-auto py-2" /></Field>
+              <SubmitButton variant="accent" pendingText="Mengimpor...">Unggah</SubmitButton>
+            </form>
+          </details>
+        </Card>
+      )}
+
+      <div className="no-print grid gap-4 sm:grid-cols-3">
         {[["Total pagu", formatRupiah(totalPagu)], ["Total anggaran kas", formatRupiah(grand)], ["Belum dialokasikan", formatRupiah(totalPagu - grand)]].map(([l, v]) => (
           <Card key={l} className="p-5"><p className="text-sm text-slate-600">{l}</p><p className="mt-1 font-display text-xl font-bold tabular-nums text-navy-900">{v}</p></Card>
         ))}
@@ -70,7 +99,8 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
       {error ? <Card><EmptyState title="Data tidak dapat dimuat">Muat ulang halaman atau hubungi administrator.</EmptyState></Card>
         : items.length === 0 ? <Card><EmptyState title="Belum ada butir anggaran">Butir yang ditugaskan kepada Anda akan tampil di sini setelah anggaran diinput.</EmptyState></Card>
         : (
-        <div className="space-y-4">
+        <>
+        <div className="no-print space-y-4">
           {items.map((r) => {
             const b = r.budget_items!;
             const plan = plans.get(r.budget_item_id);
@@ -121,6 +151,12 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
                           <ConfirmSubmit variant="accent" message="Ajukan anggaran kas ini? Setelah diajukan tidak dapat diubah kecuali dikembalikan.">Ajukan</ConfirmSubmit>
                         </form>
                       )}
+                      {mine && (status === "draft" || status === "returned") && (
+                        <form action={deleteCashPlanAction}>
+                          <input type="hidden" name="versionId" value={context.versionId} /><input type="hidden" name="planId" value={plan.id} />
+                          <ConfirmSubmit variant="danger" message="Hapus draf anggaran kas butir ini? Isian bulanan akan dikosongkan.">Hapus draf</ConfirmSubmit>
+                        </form>
+                      )}
                       {canFinalize && status === "submitted" && (
                         <>
                           <form action={cashStatusAction}>
@@ -149,7 +185,34 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
             </div>
           </Card>
         </div>
+
+        {/* Tampilan cetak: rekap seluruh butir dalam satu tabel */}
+        <div className="print-only">
+          <table className="table-base">
+            <thead><tr><th>Sub kegiatan / rekening</th><th className="text-right">Pagu</th>{MONTHS.map((m) => <th key={m} className="text-right">{m}</th>)}<th className="text-right">Total kas</th></tr></thead>
+            <tbody>
+              {items.map((r) => {
+                const b = r.budget_items!;
+                const plan = plans.get(r.budget_item_id);
+                const by = (n: number) => Number(plan?.cash_budget_periods.find((p) => p.period_no === n)?.amount ?? 0);
+                const sum = MONTHS.reduce((a, _, i) => a + by(i + 1), 0);
+                return (
+                  <tr key={r.budget_item_id}>
+                    <td>{b.sub_activities?.code} {b.sub_activities?.name}<br />{b.expenditure_accounts?.code} {b.expenditure_accounts?.name}{b.pptk?.full_name ? ` · PPTK: ${b.pptk.full_name}` : ""}</td>
+                    <td className="num">{formatRupiah(r.pagu).replace(",00", "").replace("Rp ", "")}</td>
+                    {MONTHS.map((_, i) => <td key={i} className="num">{by(i + 1) ? formatRupiah(by(i + 1)).replace(",00", "").replace("Rp ", "") : "—"}</td>)}
+                    <td className="num font-semibold">{formatRupiah(sum).replace(",00", "").replace("Rp ", "")}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot><tr className="font-bold"><td>TOTAL</td><td className="num">{formatRupiah(totalPagu).replace(",00", "").replace("Rp ", "")}</td>{totals.map((t, i) => <td key={i} className="num">{t ? formatRupiah(t).replace(",00", "").replace("Rp ", "") : "—"}</td>)}<td className="num">{formatRupiah(grand).replace(",00", "").replace("Rp ", "")}</td></tr></tfoot>
+          </table>
+        </div>
+        </>
       )}
+      <SignatureBlock />
+      <PrintFooter />
     </div>
   );
 }

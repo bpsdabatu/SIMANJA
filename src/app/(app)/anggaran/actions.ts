@@ -5,6 +5,7 @@ import { userClient } from "@/lib/supabase/server";
 import { flashRedirect } from "@/lib/flash";
 import { friendlyError, isUuid, num, optStr, runAction, str, uuidOrNull } from "@/lib/action-utils";
 import { parseCsv, parseMoney } from "@/lib/csv";
+import { readTable } from "@/lib/spreadsheet";
 import { STAGES } from "@/lib/auth/context";
 
 const BACK = "/anggaran";
@@ -85,14 +86,16 @@ export async function importCsvAction(fd: FormData): Promise<void> {
   if (str(fd, "versionId", 40) !== context.versionId) flashRedirect(BACK, { err: "Konteks anggaran berubah. Muat ulang halaman." });
 
   const file = fd.get("file");
-  let text = "";
+  let rows: string[][];
   if (file instanceof File && file.size > 0) {
-    if (file.size > MAX_IMPORT_BYTES) flashRedirect(BACK, { err: "Berkas terlalu besar (maksimal 1 MB)." });
-    text = await file.text();
-  } else text = str(fd, "csv", MAX_IMPORT_BYTES);
-  if (!text.trim()) flashRedirect(BACK, { err: "Pilih berkas CSV atau tempel isinya." });
-
-  const rows = parseCsv(text);
+    const read = await readTable(file);
+    if (!read.ok) flashRedirect(BACK, { err: read.error });
+    rows = (read as { rows: string[][] }).rows;
+  } else {
+    const text = str(fd, "csv", MAX_IMPORT_BYTES);
+    if (!text.trim()) flashRedirect(BACK, { err: "Pilih berkas Excel/CSV atau tempel isinya." });
+    rows = parseCsv(text);
+  }
   const header = (rows[0] ?? []).map((h) => h.toLowerCase().replace(/\s+/g, "_"));
   const idx = Object.fromEntries(IMPORT_HEADERS.map((h) => [h, header.indexOf(h)])) as Record<string, number>;
   const missing = IMPORT_HEADERS.filter((h) => idx[h] === -1 && h !== "username_pptk" && h !== "uraian");
@@ -145,4 +148,39 @@ export async function importCsvAction(fd: FormData): Promise<void> {
     flashRedirect(BACK, { err: `${ok} baris berhasil, ${failed.length} gagal. ${failed.slice(0, 4).join("; ")}${failed.length > 4 ? " ..." : ""}` });
   }
   flashRedirect(BACK, { ok: `${ok} butir anggaran berhasil diimpor.` });
+}
+
+/* ======================= Tambahan: tahun anggaran, ubah & hapus butir ======================= */
+
+export async function addFiscalYearAction(fd: FormData): Promise<void> {
+  await requireModule("budget.edit");
+  const year = Number(str(fd, "year", 6));
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) flashRedirect(BACK, { err: "Tahun anggaran tidak valid." });
+  const supabase = await userClient();
+  const { data: existing } = await supabase.from("fiscal_years").select("id").eq("year", year).maybeSingle();
+  if (existing) flashRedirect(BACK, { err: `Tahun anggaran ${year} sudah ada. Gunakan "Buat versi baru" untuk menambah tahapan.` });
+  return runAction(BACK, `Tahun anggaran ${year} ditambahkan dengan versi Murni (draf). Aktifkan versi, lalu pilih konteks (menu Ganti) untuk membukanya.`, async () =>
+    supabase.rpc("create_budget_version", { p_year: year, p_stage: "murni", p_note: optStr(fd, "note", 300), p_copy_from: null }),
+  );
+}
+
+export async function updateItemDetailAction(fd: FormData): Promise<void> {
+  const versionId = await currentVersion(fd);
+  const item = str(fd, "itemId", 40);
+  const sub = str(fd, "subActivity", 40), acct = str(fd, "account", 40), fund = str(fd, "funding", 40);
+  if (![item, sub, acct, fund].every(isUuid)) flashRedirect(BACK, { err: "Sub kegiatan, rekening, dan sumber dana wajib dipilih." });
+  const supabase = await userClient();
+  return runAction(BACK, "Rincian butir anggaran diperbarui.", async () =>
+    supabase.rpc("update_budget_item", { p_version: versionId, p_item: item, p_sub_activity: sub, p_account: acct, p_funding: fund, p_description: optStr(fd, "description", 500) }),
+  );
+}
+
+export async function deleteItemAction(fd: FormData): Promise<void> {
+  const versionId = await currentVersion(fd);
+  const item = str(fd, "itemId", 40);
+  if (!isUuid(item)) flashRedirect(BACK, { err: "Butir tidak valid." });
+  const supabase = await userClient();
+  return runAction(BACK, "Butir anggaran dihapus dari versi ini.", async () =>
+    supabase.rpc("delete_budget_item", { p_version: versionId, p_item: item }),
+  );
 }

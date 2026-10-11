@@ -1,6 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource-variable/inter";
-import "@fontsource-variable/montserrat";
 import "./globals.css";
 
 import { APP_FULL_NAME, APP_NAME } from "@/lib/brand";
