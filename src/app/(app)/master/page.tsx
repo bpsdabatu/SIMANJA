@@ -4,7 +4,7 @@ import { Download, FileSpreadsheet, Plus, Upload } from "lucide-react";
 import { requireModule } from "@/lib/auth/guard";
 import { userClient } from "@/lib/supabase/server";
 import { MASTER, MASTER_KEYS, type MasterEntity } from "@/lib/master-config";
-import { IMPORT_SPECS } from "@/lib/master-import";
+import { IMPORT_SPECS, STANDARD_PROCUREMENT_METHODS } from "@/lib/master-import";
 import { Badge, Card, CardHeader } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
@@ -14,7 +14,7 @@ import { PrintFooter, PrintHeader } from "@/components/ui/report";
 import { getOrganizationName } from "@/lib/lookups";
 import { PptkImportForm } from "./pptk-import-form";
 import { cn } from "@/lib/utils";
-import { deleteMasterAction, importMasterAction, importMasterWorkbookAction, saveMasterAction, toggleMasterAction } from "./actions";
+import { deleteMasterAction, importMasterAction, importMasterWorkbookAction, seedProcurementMethodsAction, saveMasterAction, toggleMasterAction } from "./actions";
 
 export const metadata: Metadata = { title: "Data Master" };
 export const dynamic = "force-dynamic";
@@ -98,6 +98,15 @@ export default async function MasterPage({ searchParams }: { searchParams: Promi
       <Flash ok={sp.ok} err={sp.err} />
 
       <MasterTabs tab={tab} canUsers={canUsers} />
+
+      {tab === "procurement_methods" && (
+        <Card className="no-print p-5">
+          <p className="text-sm font-semibold text-navy-900">Metode pengadaan baku (Perpres 16/2018 jo. Perpres 12/2021 dan Perpres 46/2025)</p>
+          <p className="mt-1 text-sm text-slate-600">Isi tab ini dengan <b>cara/metode pemilihan</b> yang dipakai pada pengadaan barang/jasa; dipilih pada transaksi realisasi. Metode pemilihan penyedia: E-Purchasing, Pengadaan Langsung, Penunjukan Langsung, Tender Cepat, Tender, Seleksi (khusus jasa konsultansi); atau Swakelola Tipe I–IV. Pilihan metode bergantung pada jenis pengadaan, nilai, dan keadaan; ambang nilai berubah-ubah, jadi rujuk ketentuan LKPP terbaru.</p>
+          <ul className="mt-2 grid gap-x-6 gap-y-0.5 text-xs text-slate-600 sm:grid-cols-2">{STANDARD_PROCUREMENT_METHODS.map(([c, n]) => <li key={c}><span className="font-mono text-slate-500">{c}</span> — {n}</li>)}</ul>
+          {canManage && <form action={seedProcurementMethodsAction} className="mt-3"><SubmitButton variant="accent" pendingText="Menambah...">Isi metode baku (yang belum ada saja)</SubmitButton></form>}
+        </Card>
+      )}
 
       {canManage && (
         <Card className="no-print">

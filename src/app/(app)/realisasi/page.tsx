@@ -13,9 +13,9 @@ import { Badge, Card, CardHeader } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { EmptyState, Flash, PageHeader, TableWrap } from "@/components/ui/page";
-import { SubmitButton } from "@/components/ui/submit-button";
 import { cn } from "@/lib/utils";
-import { createTransactionAction } from "./actions";
+import { availableOf } from "@/lib/tx-rules";
+import { TransactionForm, type Recent, type TxItem } from "./transaction-form";
 
 export const metadata: Metadata = { title: "Realisasi Belanja" };
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ interface ItemRow {
   budget_items: { pptk_id: string | null; description: string | null; sub_activities: { code: string; name: string } | null; expenditure_accounts: { code: string } | null } | null;
 }
 
-export default async function RealisasiPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string; status?: string; q?: string; keg?: string; sub?: string; bel?: string; dana?: string; pptk?: string; cari?: string }> }) {
+export default async function RealisasiPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string; butir?: string; status?: string; q?: string; keg?: string; sub?: string; bel?: string; dana?: string; pptk?: string; cari?: string }> }) {
   const { user, context } = await requireModule("realization.view");
   const sp = await searchParams;
   const status = sp.status && TX_STATUS[sp.status] ? sp.status : "";
@@ -57,6 +57,13 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
   const exportQs = new URLSearchParams(Object.entries(fparams).filter(([, v]) => v)).toString();
   const items = new Map(((itemsRaw ?? []) as unknown as ItemRow[]).map((i) => [i.budget_item_id, i.budget_items]));
   const myItems = ((itemsRaw ?? []) as unknown as ItemRow[]).filter((i) => i.budget_items?.pptk_id === user.id);
+  const myIds = new Set(myItems.map((i) => i.budget_item_id));
+  const txItems: TxItem[] = balance.rows.filter((r) => myIds.has(r.itemId)).map((r) => ({
+    id: r.itemId, subCode: r.subCode, subName: r.subName, accountCode: r.accountCode, accountName: r.accountName, funding: r.funding,
+    description: r.description, pagu: r.pagu, realisasi: r.realisasi, pending: r.pending, available: availableOf(r.pagu, r.realisasi, r.pending),
+  }));
+  const recent: Recent[] = ((txRaw ?? []) as unknown as Tx[]).filter((t) => t.status !== "cancelled")
+    .map((t) => ({ itemId: t.budget_item_id, date: t.transaction_date, amount: t.payment_records.reduce((a, p) => a + Number(p.amount), 0) }));
   const q = (sp.q ?? "").trim().toLowerCase().slice(0, 60);
   const txs = ((txRaw ?? []) as unknown as Tx[]).filter((t) => !q || t.description.toLowerCase().includes(q) || (t.suppliers?.name ?? "").toLowerCase().includes(q));
   const sum = (t: Tx) => t.payment_records.reduce((s, p) => s + Number(p.amount), 0);
@@ -75,27 +82,13 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
       )}
 
       {canCreate && opts && (
-        <Card>
-          <details>
+        <Card id="form">
+          <details open={!!sp.butir || !!sp.err}>
             <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-sm font-semibold text-navy-800 [&::-webkit-details-marker]:hidden"><Plus size={16} aria-hidden /> Buat transaksi baru</summary>
-            {myItems.length === 0 ? (
+            {txItems.length === 0 ? (
               <p className="border-t border-slate-100 px-5 py-4 text-sm text-slate-600">Belum ada butir anggaran yang ditugaskan kepada Anda pada konteks ini.</p>
             ) : (
-              <form action={createTransactionAction} className="grid gap-4 border-t border-slate-100 p-5 sm:grid-cols-2">
-                <input type="hidden" name="versionId" value={context.versionId} />
-                <Field label="Butir anggaran" htmlFor="itemId" className="sm:col-span-2">
-                  <Select id="itemId" name="itemId" required defaultValue="">
-                    <option value="" disabled>Pilih butir anggaran</option>
-                    {myItems.map((i) => <option key={i.budget_item_id} value={i.budget_item_id}>{i.budget_items?.sub_activities?.code} · {i.budget_items?.expenditure_accounts?.code}{i.budget_items?.description ? ` · ${i.budget_items.description}` : ""} · sisa {formatRupiah(sisaOf.get(i.budget_item_id) ?? 0)}</option>)}
-                  </Select>
-                </Field>
-                <Field label="Tanggal transaksi" htmlFor="date"><Input id="date" name="date" type="date" required /></Field>
-                <Field label="Nilai pembayaran (Rp)" htmlFor="amount"><Input id="amount" name="amount" type="number" min={0.01} step="0.01" required inputMode="decimal" /></Field>
-                <Field label="Uraian" htmlFor="description" className="sm:col-span-2"><Input id="description" name="description" required maxLength={500} /></Field>
-                <Field label="Penyedia" htmlFor="supplier"><Select id="supplier" name="supplier" defaultValue=""><option value="">— Tanpa penyedia —</option>{opts.suppliers.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</Select></Field>
-                <Field label="Metode pengadaan" htmlFor="method"><Select id="method" name="method" defaultValue=""><option value="">— Tidak ada —</option>{opts.methods.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</Select></Field>
-                <div className="sm:col-span-2"><SubmitButton pendingText="Menyimpan...">Simpan sebagai draf</SubmitButton></div>
-              </form>
+              <TransactionForm versionId={context.versionId} year={context.year} items={txItems} recent={recent} suppliers={opts.suppliers} methods={opts.methods} preselect={sp.butir ?? ""} />
             )}
           </details>
         </Card>
@@ -128,7 +121,7 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
           : (
           <TableWrap>
             <table className="table-base">
-              <thead><tr><th>Sub kegiatan</th><th>Rekening</th><th>Sumber dana</th><th>PPTK</th><th className="text-right">Pagu</th><th className="text-right">Realisasi</th><th className="text-right">Menunggu SP2D</th><th className="text-right">Sisa anggaran</th><th className="text-right">%</th></tr></thead>
+              <thead><tr><th>Sub kegiatan</th><th>Rekening</th><th>Sumber dana</th><th>PPTK</th><th className="text-right">Pagu</th><th className="text-right">Realisasi</th><th className="text-right">Menunggu SP2D</th><th className="text-right">Sisa anggaran</th><th className="text-right">%</th>{canCreate && <th className="no-print" />}</tr></thead>
               <tbody>
                 {found.map((r) => (
                   <tr key={r.itemId}>
@@ -139,10 +132,11 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
                     <td className="num">{r.pending ? formatRupiah(r.pending) : "—"}</td>
                     <td className={cn("num font-semibold", r.sisa < 0 && "text-red-700")}>{formatRupiah(r.sisa)}</td>
                     <td className="num">{formatPercent(r.pct)}</td>
+                    {canCreate && <td className="no-print text-right">{myIds.has(r.itemId) ? <Link href={`/realisasi?butir=${r.itemId}#form`} className={buttonVariants({ variant: "outline", size: "sm" })}>Buat transaksi</Link> : null}</td>}
                   </tr>
                 ))}
               </tbody>
-              <tfoot><tr className="bg-slate-50 font-bold"><td colSpan={4} className="px-3 py-3 text-right">TOTAL ({found.length} butir)</td><td className="num px-3 py-3">{formatRupiah(tot.pagu)}</td><td className="num px-3 py-3">{formatRupiah(tot.realisasi)}</td><td className="num px-3 py-3">{formatRupiah(tot.pending)}</td><td className="num px-3 py-3">{formatRupiah(tot.sisa)}</td><td className="num px-3 py-3">{formatPercent(tot.pct)}</td></tr></tfoot>
+              <tfoot><tr className="bg-slate-50 font-bold"><td colSpan={4} className="px-3 py-3 text-right">TOTAL ({found.length} butir)</td><td className="num px-3 py-3">{formatRupiah(tot.pagu)}</td><td className="num px-3 py-3">{formatRupiah(tot.realisasi)}</td><td className="num px-3 py-3">{formatRupiah(tot.pending)}</td><td className="num px-3 py-3">{formatRupiah(tot.sisa)}</td><td className="num px-3 py-3">{formatPercent(tot.pct)}</td>{canCreate && <td className="no-print" />}</tr></tfoot>
             </table>
           </TableWrap>
         )}

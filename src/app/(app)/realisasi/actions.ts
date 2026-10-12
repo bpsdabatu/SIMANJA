@@ -4,10 +4,20 @@ import { requireModule } from "@/lib/auth/guard";
 import { userClient } from "@/lib/supabase/server";
 import { flashRedirect } from "@/lib/flash";
 import { friendlyError, isUuid, num, optStr, runAction, str, uuidOrNull } from "@/lib/action-utils";
+import { availableOf, checkTransaction } from "@/lib/tx-rules";
+import { todayWIB } from "@/lib/quarterly-core";
 
 const LIST = "/realisasi";
 const detail = (id: string) => `/realisasi/${id}`;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+type Sb = Awaited<ReturnType<typeof userClient>>;
+
+/** Sisa tersedia butir pada versi: pagu − realisasi sah − pembayaran menunggu SP2D (RLS membatasi ke butir yang boleh dilihat). */
+async function availableFor(sb: Sb, version: string, item: string): Promise<number | null> {
+  const { data } = await sb.from("v_budget_balance").select("pagu, eligible_realization, pending_sp2d").eq("budget_version_id", version).eq("budget_item_id", item).maybeSingle();
+  return data ? availableOf(Number(data.pagu), Number(data.eligible_realization), Number(data.pending_sp2d)) : null;
+}
 
 export async function createTransactionAction(fd: FormData): Promise<void> {
   const { context } = await requireModule("realization.edit");
@@ -15,11 +25,23 @@ export async function createTransactionAction(fd: FormData): Promise<void> {
   const item = str(fd, "itemId", 40);
   const date = str(fd, "date", 10);
   const amount = num(fd, "amount");
+  const back = isUuid(item) ? `${LIST}?butir=${item}` : LIST;
   if (!isUuid(item)) flashRedirect(LIST, { err: "Pilih butir anggaran." });
-  if (!DATE_RE.test(date)) flashRedirect(LIST, { err: "Tanggal transaksi tidak valid." });
-  if (!Number.isFinite(amount) || amount <= 0) flashRedirect(LIST, { err: "Nilai pembayaran harus lebih dari nol." });
+  if (!str(fd, "description", 500)) flashRedirect(back, { err: "Uraian transaksi wajib diisi." });
 
   const supabase = await userClient();
+  const available = await availableFor(supabase, context.versionId, item);
+  if (available === null) flashRedirect(LIST, { err: "Butir anggaran tidak ditemukan atau bukan milik Anda." });
+  // Duplikat: transaksi aktif dengan butir, tanggal, dan total pembayaran yang sama
+  let duplicate = false;
+  if (DATE_RE.test(date)) {
+    const { data: same } = await supabase.from("realization_transactions").select("id, payment_records(amount)")
+      .eq("budget_version_id", context.versionId).eq("budget_item_id", item).eq("transaction_date", date).neq("status", "cancelled").limit(50);
+    duplicate = (same ?? []).some((t) => Math.round((t.payment_records as { amount: string | number }[]).reduce((a, p) => a + Number(p.amount), 0) * 100) === Math.round(amount * 100));
+  }
+  const problem = checkTransaction({ date, today: todayWIB(new Date()), year: context.year, amount, available: available!, duplicate, confirmDuplicate: str(fd, "confirmDuplicate", 5) === "true" });
+  if (problem) flashRedirect(back, { err: problem });
+
   let id = "";
   let message = "";
   try {
@@ -29,7 +51,17 @@ export async function createTransactionAction(fd: FormData): Promise<void> {
     });
     if (error) message = friendlyError(error); else id = String(data);
   } catch { message = "Terjadi kesalahan pada sistem. Silakan coba lagi."; }
-  if (message) flashRedirect(LIST, { err: message });
+  if (message) flashRedirect(back, { err: message });
+
+  if (str(fd, "intent", 10) === "submit") {
+    let submitErr = "";
+    try {
+      const { error } = await supabase.rpc("submit_transaction", { p_tx: id });
+      if (error) submitErr = friendlyError(error);
+    } catch { submitErr = "Terjadi kesalahan pada sistem."; }
+    if (submitErr) flashRedirect(detail(id), { err: `Transaksi tersimpan sebagai draf, tetapi belum dapat diajukan: ${submitErr}` });
+    flashRedirect(detail(id), { ok: "Transaksi dibuat dan diajukan untuk verifikasi." });
+  }
   flashRedirect(detail(id), { ok: "Transaksi draf dibuat. Tambahkan pembayaran bila perlu, lalu ajukan." });
 }
 
@@ -45,6 +77,11 @@ export async function addPaymentAction(fd: FormData): Promise<void> {
   const amount = num(fd, "amount");
   if (!Number.isFinite(amount) || amount <= 0) flashRedirect(detail(id), { err: "Nilai pembayaran harus lebih dari nol." });
   const supabase = await userClient();
+  const { data: tx } = await supabase.from("realization_transactions").select("budget_version_id, budget_item_id").eq("id", id).maybeSingle();
+  if (tx) {
+    const available = await availableFor(supabase, tx.budget_version_id as string, tx.budget_item_id as string);
+    if (available !== null && amount > available) flashRedirect(detail(id), { err: `Nilai melebihi sisa anggaran tersedia (Rp ${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 2 }).format(Math.max(0, available))}).` });
+  }
   return runAction(detail(id), "Pembayaran ditambahkan.", async () =>
     supabase.rpc("add_payment", { p_tx: id, p_amount: amount, p_note: optStr(fd, "note", 200) }),
   );

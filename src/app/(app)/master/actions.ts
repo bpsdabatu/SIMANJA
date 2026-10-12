@@ -5,7 +5,7 @@ import { userClient } from "@/lib/supabase/server";
 import { flashRedirect } from "@/lib/flash";
 import { MASTER } from "@/lib/master-config";
 import { readTable, readWorkbook } from "@/lib/spreadsheet";
-import { parseMasterTable, rowKey, IMPORT_SPECS, type ParsedRow } from "@/lib/master-import";
+import { parseMasterTable, rowKey, IMPORT_SPECS, STANDARD_PROCUREMENT_METHODS, type ParsedRow } from "@/lib/master-import";
 import { friendlyError, isUuid, optStr, runAction, str } from "@/lib/action-utils";
 
 export async function saveMasterAction(fd: FormData): Promise<void> {
@@ -208,4 +208,18 @@ export async function importMasterWorkbookAction(fd: FormData): Promise<void> {
   }
   if (done.length === 0) flashRedirect(back, { err: "Tidak ada sheet yang dikenali. Nama sheet: PROGRAM, KEGIATAN, SUB KEGIATAN, BELANJA, SUMBER DANA." });
   flashRedirect(back, { ok: `Impor berkas selesai — ${done.join("; ")}.` });
+}
+
+/** Mengisi metode pengadaan baku (Perpres 16/2018 jo. 12/2021). Aditif: kode yang sudah ada tidak diubah. */
+export async function seedProcurementMethodsAction(): Promise<void> {
+  const { user } = await requireModule("master.manage");
+  const back = "/master?tab=procurement_methods";
+  const supabase = await userClient();
+  const { data } = await supabase.from("procurement_methods").select("code").limit(1000);
+  const have = new Set((data ?? []).map((r) => String(r.code).trim().toLowerCase()));
+  const rows = STANDARD_PROCUREMENT_METHODS.filter(([c]) => !have.has(c.toLowerCase())).map(([code, name]) => ({ organization_id: user.organizationId, code, name }));
+  if (rows.length === 0) flashRedirect(back, { ok: "Seluruh metode pengadaan baku sudah ada." });
+  const { error } = await supabase.from("procurement_methods").insert(rows);
+  if (error) flashRedirect(back, { err: friendlyError(error) });
+  flashRedirect(back, { ok: `${rows.length} metode pengadaan baku ditambahkan.` });
 }

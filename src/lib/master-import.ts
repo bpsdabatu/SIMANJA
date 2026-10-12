@@ -22,7 +22,7 @@ export const IMPORT_SPECS: Record<string, ImportSpec> = {
   },
   expenditure_accounts: { columns: [code(["kode_rekening"]), name(["nama_rekening", "uraian_rekening"])], sample: ["5.1.02.01.01.0024", "Belanja Alat/Bahan untuk Kegiatan Kantor"] },
   funding_sources: { columns: [code(["kode_sumber_dana"]), name(["nama_sumber_dana"], 200)], sample: ["1.1.01", "Pendapatan Asli Daerah"] },
-  procurement_methods: { columns: [code(["kode_metode"]), name(["nama_metode"], 200)], sample: ["PL", "Pengadaan Langsung"] },
+  procurement_methods: { columns: [code(["kode_metode"]), name(["nama_metode"], 200)], sample: ["PGL", "Pengadaan Langsung"] },
   suppliers: {
     columns: [
       { key: "name", label: "nama", aliases: ["nama", "name", "nama_penyedia"], required: true, max: 200 },
@@ -41,9 +41,29 @@ export const IMPORT_SPECS: Record<string, ImportSpec> = {
   },
 };
 
+/**
+ * Metode pengadaan baku menurut Perpres 16/2018 sebagaimana diubah Perpres 12/2021 (dan Perpres 46/2025),
+ * serta Peraturan LKPP 3/2021 (tipe swakelola) dan 12/2021 (pedoman pelaksanaan melalui penyedia).
+ * Nilai ambang & syarat TIDAK disimpan di sini: periksa ketentuan terbaru LKPP sebelum memutuskan metode.
+ */
+export const STANDARD_PROCUREMENT_METHODS: [code: string, name: string][] = [
+  ["EPC", "E-Purchasing (Katalog Elektronik)"],
+  ["PGL", "Pengadaan Langsung"],
+  ["PNL", "Penunjukan Langsung"],
+  ["TCP", "Tender Cepat"],
+  ["TDR", "Tender"],
+  ["SEL", "Seleksi (Jasa Konsultansi)"],
+  ["SWK-1", "Swakelola Tipe I (dikerjakan sendiri oleh K/L/Perangkat Daerah penanggung jawab anggaran)"],
+  ["SWK-2", "Swakelola Tipe II (oleh K/L/Perangkat Daerah lain)"],
+  ["SWK-3", "Swakelola Tipe III (oleh Organisasi Kemasyarakatan)"],
+  ["SWK-4", "Swakelola Tipe IV (oleh Kelompok Masyarakat)"],
+];
+
 export function importTemplateRows(entity: string): string[][] | null {
   const spec = IMPORT_SPECS[entity];
-  return spec ? [spec.columns.map((c) => c.label), spec.sample] : null;
+  if (!spec) return null;
+  if (entity === "procurement_methods") return [spec.columns.map((c) => c.label), ...STANDARD_PROCUREMENT_METHODS];
+  return [spec.columns.map((c) => c.label), spec.sample];
 }
 
 export interface ParsedRow {
