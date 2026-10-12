@@ -37,3 +37,13 @@ describe("turunan kode induk", () => {
     expect(s.rows[0]!.parent).toBe("4.01.01.2.02");
   });
 });
+
+import { STANDARD_PROCUREMENT_METHODS, importTemplateRows } from "../src/lib/master-import";
+describe("metode pengadaan baku", () => {
+  it("kode unik dan templat memuat seluruhnya", () => {
+    const codes = STANDARD_PROCUREMENT_METHODS.map(([c]) => c.toLowerCase());
+    expect(new Set(codes).size).toBe(codes.length);
+    expect(importTemplateRows("procurement_methods")!.length).toBe(STANDARD_PROCUREMENT_METHODS.length + 1);
+    expect(parseMasterTable("procurement_methods", importTemplateRows("procurement_methods")!).problems).toEqual([]);
+  });
+});

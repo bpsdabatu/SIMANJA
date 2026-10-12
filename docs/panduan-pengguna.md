@@ -61,3 +61,7 @@ Kartu *Pencarian Realisasi & Sisa Anggaran* di halaman Realisasi Belanja: filter
 
 ### Dasbor: peringkat capaian
 Kartu *Peringkat Capaian Realisasi Anggaran*: pilih peringkat menurut PPTK/Kegiatan/Sub Kegiatan dan periode (tahun, triwulan, atau bulan). Menampilkan 5 tertinggi dan 5 terendah menurut realisasi kumulatif s.d. akhir periode ÷ pagu.
+
+### Realisasi Belanja: input transaksi yang disederhanakan
+Form *Buat transaksi baru* kini 4 langkah: cari & pilih butir (atau klik **Buat transaksi** pada baris hasil pencarian) → tanggal (bawaan hari ini WIB) → nilai → uraian. Ringkasan pagu/realisasi/menunggu SP2D/**sisa tersedia** tampil langsung beserta sisa setelah transaksi. Tombol **Simpan & ajukan verifikasi** menyimpan dan mengirim sekaligus; **Simpan sebagai draf** bila masih ada pembayaran lain.
+Pemeriksaan otomatis (juga di server): nilai ≤ sisa tersedia (pagu − realisasi − menunggu SP2D), tanggal pada tahun anggaran dan tidak melewati hari ini, maksimal 2 desimal, serta peringatan transaksi ganda (butir+tanggal+nilai sama) yang harus dikonfirmasi. Aturan nilai ≤ sisa juga berlaku saat menambah pembayaran.

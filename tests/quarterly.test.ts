@@ -94,3 +94,24 @@ describe("pencarian realisasi & sisa", () => {
     expect(filterOptions(all).sub.map((o) => o.value)).toEqual(["S1", "S2"]);
   });
 });
+
+import { availableOf, checkTransaction } from "../src/lib/tx-rules";
+describe("aturan transaksi belanja", () => {
+  const ok = { date: "2026-03-10", today: "2026-03-10", year: 2026, amount: 100, available: 500, duplicate: false, confirmDuplicate: false };
+  it("lolos pada data wajar", () => expect(checkTransaction(ok)).toBeNull());
+  it("menolak tanggal di luar tahun / masa depan", () => {
+    expect(checkTransaction({ ...ok, date: "2025-12-31" })).toContain("tahun anggaran 2026");
+    expect(checkTransaction({ ...ok, date: "2026-03-11" })).toContain("hari ini");
+  });
+  it("menolak nilai > sisa tersedia, nol, atau lebih dari 2 desimal", () => {
+    expect(checkTransaction({ ...ok, amount: 500.01 })).toContain("melebihi sisa");
+    expect(checkTransaction({ ...ok, amount: 500 })).toBeNull();
+    expect(checkTransaction({ ...ok, amount: 0 })).toContain("lebih dari nol");
+    expect(checkTransaction({ ...ok, amount: 1.234 })).toContain("dua angka desimal");
+  });
+  it("duplikat butuh konfirmasi", () => {
+    expect(checkTransaction({ ...ok, duplicate: true })).toContain("konfirmasi");
+    expect(checkTransaction({ ...ok, duplicate: true, confirmDuplicate: true })).toBeNull();
+  });
+  it("sisa tersedia = pagu − realisasi − menunggu SP2D", () => expect(availableOf(1000, 300, 200.5)).toBe(499.5));
+});
