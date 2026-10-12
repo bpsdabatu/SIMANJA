@@ -6,18 +6,21 @@ import { STAGE_LABEL } from "@/lib/auth/context";
 import { getOrganizationName } from "@/lib/lookups";
 import { formatRupiah } from "@/lib/format";
 import { Badge, Card, CardHeader } from "@/components/ui/card";
-import { Download, FileSpreadsheet, Upload } from "lucide-react";
+import { Download, FileSpreadsheet, Search, Upload } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/input";
+import { Field, Input, Select } from "@/components/ui/input";
 import { EmptyState, Flash, PageHeader } from "@/components/ui/page";
 import { ConfirmSubmit, PrintButton, SubmitButton } from "@/components/ui/submit-button";
 import { PrintFooter, PrintHeader, SignatureBlock } from "@/components/ui/report";
-import { cashStatusAction, deleteCashPlanAction, importCashPlansAction, saveCashPlanAction } from "./actions";
+import { MONTHS_SHORT, TW_LABEL, allocation, quarterSums, recapTotals } from "@/lib/cash-core";
+import { cn } from "@/lib/utils";
+import { CashPlanForm } from "./cash-plan-form";
+import { cashStatusAction, deleteCashPlanAction, importCashPlansAction } from "./actions";
 
 export const metadata: Metadata = { title: "Anggaran Kas" };
 export const dynamic = "force-dynamic";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+const MONTHS = MONTHS_SHORT;
 const STATUS = {
   none: { label: "Belum disusun", tone: "slate" }, draft: { label: "Draf", tone: "amber" }, submitted: { label: "Diajukan", tone: "navy" },
   returned: { label: "Dikembalikan", tone: "red" }, final: { label: "Final", tone: "green" },
@@ -34,7 +37,7 @@ interface ItemRow {
 }
 interface PlanRow { id: string; budget_item_id: string; status: St; revision_no: number; change_reason: string | null; cash_budget_periods: { period_no: number; period_type?: string; amount: string | number }[] }
 
-export default async function AnggaranKasPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string }> }) {
+export default async function AnggaranKasPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string; cari?: string; st?: string }> }) {
   const { user, context } = await requireModule("cashplan.view");
   const sp = await searchParams;
   const supabase = await userClient();
@@ -47,15 +50,31 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
     getOrganizationName(supabase, user.organizationId),
   ]);
   const error = itemsRes.error;
-  const items = itemsRes.rows.filter((r) => r.budget_items)
+  const allItems = itemsRes.rows.filter((r) => r.budget_items)
     .sort((a, b) => (a.budget_items!.sub_activities?.code ?? "").localeCompare(b.budget_items!.sub_activities?.code ?? "", "id", { numeric: true }));
   const plans = new Map(plansRes.rows.map((p) => [p.budget_item_id, p]));
   const canEdit = user.permissions.has("cashplan.edit");
   const canFinalize = user.permissions.has("cashplan.finalize");
 
-  const totals = MONTHS.map((_, i) => items.reduce((s, r) => s + Number(plans.get(r.budget_item_id)?.cash_budget_periods.find((p) => p.period_no === i + 1)?.amount ?? 0), 0));
-  const grand = totals.reduce((a, b) => a + b, 0);
-  const totalPagu = items.reduce((s, r) => s + Number(r.pagu), 0);
+  const monthsOf = (id: string) => MONTHS.map((_, i) => Number(plans.get(id)?.cash_budget_periods.find((p) => p.period_no === i + 1)?.amount ?? 0));
+  const statusOf = (id: string): St => plans.get(id)?.status ?? "none";
+
+  // Filter tampilan (kata kunci + status). Ringkasan & rekap selalu memakai SELURUH butir.
+  const cari = (sp.cari ?? "").trim().toLowerCase().slice(0, 60);
+  const stFilter = sp.st && (sp.st in STATUS) ? (sp.st as St) : "";
+  const items = allItems.filter((r) => {
+    const b = r.budget_items!;
+    if (stFilter && statusOf(r.budget_item_id) !== stFilter) return false;
+    if (!cari) return true;
+    return [b.sub_activities?.code, b.sub_activities?.name, b.expenditure_accounts?.code, b.expenditure_accounts?.name, b.description, b.pptk?.full_name]
+      .some((x) => (x ?? "").toLowerCase().includes(cari));
+  });
+
+  const recap = recapTotals(allItems.map((r) => ({ pagu: Number(r.pagu), months: plans.has(r.budget_item_id) ? monthsOf(r.budget_item_id) : null, status: plans.get(r.budget_item_id)?.status ?? null })));
+  const totals = MONTHS.map((_, i) => allItems.reduce((s, r) => s + monthsOf(r.budget_item_id)[i]!, 0));
+  const grand = recap.total;
+  const totalPagu = recap.pagu;
+  const statusCount = allItems.reduce<Record<St, number>>((acc, r) => { acc[statusOf(r.budget_item_id)]++; return acc; }, { none: 0, draft: 0, submitted: 0, returned: 0, final: 0 });
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -102,14 +121,88 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
         </Card>
       )}
 
-      <div className="no-print grid gap-4 sm:grid-cols-3">
-        {[["Total pagu", formatRupiah(totalPagu)], ["Total anggaran kas", formatRupiah(grand)], ["Belum dialokasikan", formatRupiah(totalPagu - grand)]].map(([l, v]) => (
-          <Card key={l} className="p-5"><p className="text-sm text-slate-600">{l}</p><p className="mt-1 font-display text-xl font-bold tabular-nums text-navy-900">{v}</p></Card>
+      <div className="no-print grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {([
+          ["Total pagu", formatRupiah(totalPagu), `${recap.count} butir anggaran`, "border-navy-200 bg-navy-50/60", "bg-navy-600", "text-navy-900"],
+          ["Sudah diinput (kas)", formatRupiah(grand), `${recap.filled} butir sudah disusun`, "border-sky-200 bg-sky-50/70", "bg-sky-500", "text-sky-900"],
+          [recap.sisa < 0 ? "Melebihi pagu" : "Sisa belum diinput", formatRupiah(Math.abs(recap.sisa)), recap.sisa === 0 && recap.count > 0 ? "Seluruh pagu sudah dialokasikan" : `${recap.count - recap.filled} butir belum disusun`, recap.sisa < 0 ? "border-red-200 bg-red-50/70" : "border-amber-200 bg-amber-50/70", recap.sisa < 0 ? "bg-red-500" : "bg-amber-500", recap.sisa < 0 ? "text-red-800" : "text-amber-900"],
+          ["Status pengajuan", `${statusCount.final} final · ${statusCount.submitted} diajukan`, `${statusCount.draft} draf · ${statusCount.returned} dikembalikan · ${statusCount.none} belum disusun`, "border-emerald-200 bg-emerald-50/70", "bg-emerald-500", "text-emerald-900"],
+        ] as const).map(([l, v, h, box, bar, txt]) => (
+          <div key={l} className={cn("relative overflow-hidden rounded-xl border p-5 shadow-card", box)}>
+            <span className={cn("absolute inset-x-0 top-0 h-1", bar)} aria-hidden />
+            <p className="text-sm font-medium text-slate-600">{l}</p>
+            <p className={cn("mt-1 break-words font-display text-xl font-bold tabular-nums", txt)}>{v}</p>
+            <p className="mt-1 text-xs text-slate-500">{h}</p>
+          </div>
         ))}
       </div>
 
+      {/* Rekapitulasi Anggaran Kas per Triwulan (tampil juga saat dicetak) */}
+      <Card>
+        <CardHeader
+          title="Rekapitulasi Anggaran Kas per Triwulan"
+          description="Jumlah rencana kas seluruh butir per triwulan, dibandingkan dengan pagu. Unduhan Excel memuat lembar “Rekap Triwulan” per butir."
+          actions={<a href="/anggaran-kas/export?format=xlsx" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "no-print h-9")}><Download size={14} aria-hidden /> Excel</a>}
+        />
+        <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
+          {recap.tw.map((v, i) => {
+            const tone = [["border-sky-200 bg-sky-50", "text-sky-700", "bg-sky-500"], ["border-emerald-200 bg-emerald-50", "text-emerald-700", "bg-emerald-500"], ["border-amber-200 bg-amber-50", "text-amber-700", "bg-amber-500"], ["border-violet-200 bg-violet-50", "text-violet-700", "bg-violet-500"]][i]!;
+            const share = totalPagu > 0 ? Math.min(100, (v / totalPagu) * 100) : 0;
+            return (
+              <div key={i} className={cn("rounded-xl border p-4", tone[0])}>
+                <p className={cn("text-xs font-semibold uppercase tracking-wide", tone[1])}>{TW_LABEL[i]} · {MONTHS[i * 3]}–{MONTHS[i * 3 + 2]}</p>
+                <p className="mt-1 font-display text-lg font-bold tabular-nums text-slate-900">{formatRupiah(v)}</p>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/70"><div className={cn("h-full rounded-full", tone[2])} style={{ width: `${share}%` }} /></div>
+                <p className="mt-1 text-xs text-slate-600">{totalPagu > 0 ? `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format((v / totalPagu) * 100)}% dari pagu` : "Pagu 0"}</p>
+              </div>
+            );
+          })}
+        </div>
+        <div className="overflow-x-auto border-t border-slate-100">
+          <table className="table-base">
+            <thead><tr><th>Sub kegiatan / rekening</th><th>PPTK</th><th className="text-right">Pagu</th>{TW_LABEL.map((t) => <th key={t} className="text-right">{t}</th>)}<th className="text-right">Total kas</th><th className="text-right">Sisa belum diinput</th><th>Status</th></tr></thead>
+            <tbody>
+              {allItems.map((r) => {
+                const b = r.budget_items!;
+                const m = monthsOf(r.budget_item_id);
+                const q = quarterSums(m);
+                const al = allocation(Number(r.pagu), m);
+                const st = statusOf(r.budget_item_id);
+                return (
+                  <tr key={r.budget_item_id}>
+                    <td><span className="font-mono text-xs text-slate-500">{b.sub_activities?.code}</span> {b.sub_activities?.name}<br /><span className="font-mono text-xs text-slate-500">{b.expenditure_accounts?.code}</span> {b.expenditure_accounts?.name}</td>
+                    <td className="text-xs">{b.pptk?.full_name ?? "—"}</td>
+                    <td className="num">{formatRupiah(r.pagu).replace(",00", "").replace("Rp ", "")}</td>
+                    {q.map((v, i) => <td key={i} className="num">{v ? formatRupiah(v).replace(",00", "").replace("Rp ", "") : "—"}</td>)}
+                    <td className="num font-semibold">{formatRupiah(al.input).replace(",00", "").replace("Rp ", "")}</td>
+                    <td className={cn("num font-semibold", al.sisa < 0 ? "text-red-700" : al.sisa === 0 ? "text-emerald-700" : "text-amber-700")}>{formatRupiah(al.sisa).replace(",00", "").replace("Rp ", "")}</td>
+                    <td><Badge tone={STATUS[st].tone}>{STATUS[st].label}</Badge></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot><tr className="bg-slate-50 font-bold"><td colSpan={2} className="px-3 py-3 text-right">TOTAL</td><td className="num px-3 py-3">{formatRupiah(totalPagu).replace(",00", "").replace("Rp ", "")}</td>{recap.tw.map((v, i) => <td key={i} className="num px-3 py-3">{formatRupiah(v).replace(",00", "").replace("Rp ", "")}</td>)}<td className="num px-3 py-3">{formatRupiah(grand).replace(",00", "").replace("Rp ", "")}</td><td className="num px-3 py-3">{formatRupiah(recap.sisa).replace(",00", "").replace("Rp ", "")}</td><td /></tr></tfoot>
+          </table>
+        </div>
+      </Card>
+
+      <Card className="no-print">
+        <form action="/anggaran-kas" className="flex flex-wrap items-end gap-3 p-4">
+          <Field label="Cari butir" htmlFor="kas-cari"><Input id="kas-cari" name="cari" defaultValue={sp.cari ?? ""} placeholder="kode/nama sub kegiatan, rekening, PPTK" maxLength={60} className="w-72" /></Field>
+          <Field label="Status" htmlFor="kas-st">
+            <Select id="kas-st" name="st" defaultValue={stFilter} className="w-48">
+              <option value="">Semua status</option>
+              {(Object.keys(STATUS) as St[]).map((k) => <option key={k} value={k}>{STATUS[k].label} ({statusCount[k]})</option>)}
+            </Select>
+          </Field>
+          <button className={buttonVariants({ variant: "primary" })}><Search size={16} aria-hidden /> Tampilkan</button>
+          <a href="/anggaran-kas" className={buttonVariants({ variant: "outline" })}>Atur ulang</a>
+          <p className="ml-auto text-xs text-slate-500">Menampilkan {items.length} dari {allItems.length} butir</p>
+        </form>
+      </Card>
+
       {error ? <Card><EmptyState title="Data tidak dapat dimuat">Muat ulang halaman atau hubungi administrator.</EmptyState></Card>
-        : items.length === 0 ? <Card><EmptyState title="Belum ada butir anggaran">Butir yang ditugaskan kepada Anda akan tampil di sini setelah anggaran diinput.</EmptyState></Card>
+        : allItems.length === 0 ? <Card><EmptyState title="Belum ada butir anggaran">Butir yang ditugaskan kepada Anda akan tampil di sini setelah anggaran diinput.</EmptyState></Card>
         : (
         <>
         <div className="no-print space-y-4">
@@ -129,25 +222,17 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
                   actions={<><Badge tone={STATUS[status].tone}>{STATUS[status].label}{plan && plan.revision_no > 1 ? ` · rev ${plan.revision_no}` : ""}</Badge></>}
                 />
                 <div className="px-5 py-4">
-                  <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-                    <span>Pagu: <b className="tabular-nums">{formatRupiah(r.pagu)}</b></span>
-                    <span>Kas: <b className="tabular-nums">{formatRupiah(sum)}</b></span>
-                    <span className={Number(r.pagu) - sum === 0 ? "text-emerald-700" : "text-amber-700"}>Sisa dialokasikan: <b className="tabular-nums">{formatRupiah(Number(r.pagu) - sum)}</b></span>
-                  </div>
+                  {!editable && (
+                    <div className="mb-3 grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm"><span className="text-xs text-slate-500">Pagu</span><br /><b className="tabular-nums text-navy-900">{formatRupiah(r.pagu)}</b></div>
+                      <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm"><span className="text-xs text-sky-700">Sudah diinput</span><br /><b className="tabular-nums text-sky-900">{formatRupiah(sum)}</b></div>
+                      <div className={cn("rounded-lg border px-3 py-2 text-sm", Number(r.pagu) - sum < 0 ? "border-red-200 bg-red-50 text-red-800" : Number(r.pagu) - sum === 0 ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800")}><span className="text-xs">Sisa belum diinput</span><br /><b className="tabular-nums">{formatRupiah(Number(r.pagu) - sum)}</b></div>
+                    </div>
+                  )}
                   {status === "returned" && plan?.change_reason && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">Dikembalikan: {plan.change_reason}</p>}
 
                   {editable ? (
-                    <form action={saveCashPlanAction}>
-                      <input type="hidden" name="versionId" value={context.versionId} /><input type="hidden" name="itemId" value={r.budget_item_id} />
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-                        {MONTHS.map((m, i) => (
-                          <label key={m} className="block text-xs font-medium text-slate-600">{m}
-                            <Input name={`m${i + 1}`} type="number" min={0} step="0.01" inputMode="decimal" defaultValue={byMonth(i + 1) || ""} placeholder="0" className="mt-1 h-9 text-right tabular-nums" />
-                          </label>
-                        ))}
-                      </div>
-                      <div className="mt-4"><SubmitButton variant="primary" pendingText="Menyimpan...">Simpan draf</SubmitButton></div>
-                    </form>
+                    <CashPlanForm key={`${r.budget_item_id}-${status}-${plan?.revision_no ?? 0}-${sum}`} versionId={context.versionId} itemId={r.budget_item_id} pagu={Number(r.pagu)} initial={MONTHS.map((_, i) => byMonth(i + 1))} hasPlan={!!plan} />
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="table-base"><thead><tr>{MONTHS.map((m) => <th key={m} className="text-right">{m}</th>)}</tr></thead>
@@ -160,7 +245,7 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
                       {mine && (status === "draft" || status === "returned") && (
                         <form action={cashStatusAction}>
                           <input type="hidden" name="versionId" value={context.versionId} /><input type="hidden" name="planId" value={plan.id} /><input type="hidden" name="to" value="submitted" />
-                          <ConfirmSubmit variant="accent" message="Ajukan anggaran kas ini? Setelah diajukan tidak dapat diubah kecuali dikembalikan.">Ajukan</ConfirmSubmit>
+                          <ConfirmSubmit variant="accent" message={sum === 0 ? "Total kas Rp 0 (tidak ada penarikan kas pada butir ini). Ajukan? Setelah diajukan tidak dapat diubah kecuali dikembalikan." : "Ajukan anggaran kas ini? Setelah diajukan tidak dapat diubah kecuali dikembalikan."}>Ajukan</ConfirmSubmit>
                         </form>
                       )}
                       {mine && (status === "draft" || status === "returned") && (

@@ -78,7 +78,10 @@ export function TransactionForm({ versionId, year, items, recent, suppliers, met
       <div>
         <label htmlFor="tx-amount" className="mb-1.5 block text-sm font-medium text-slate-800">3. Nilai pembayaran (Rp)</label>
         <input id="tx-amount" name="amount" type="number" min={0.01} step="0.01" required inputMode="decimal" value={amountRaw} onChange={(e) => setAmountRaw(e.target.value)} className={cls} />
-        {Number.isFinite(amount) && amount > 0 && <p className="mt-1 text-xs text-slate-600">{rp(amount)}</p>}
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-slate-600">
+          {Number.isFinite(amount) && amount > 0 && <span>{rp(amount)}</span>}
+          {item && item.available > 0 && <button type="button" onClick={() => setAmountRaw(String(item.available))} className="font-medium text-navy-700 underline hover:text-navy-900">Isi seluruh sisa ({rp(item.available)})</button>}
+        </div>
       </div>
       <div className="sm:col-span-2">
         <label htmlFor="tx-desc" className="mb-1.5 block text-sm font-medium text-slate-800">4. Uraian</label>
