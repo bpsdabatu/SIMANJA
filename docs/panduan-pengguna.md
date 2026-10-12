@@ -49,3 +49,15 @@ Menu *Laporan Triwulanan*: pilih triwulan dan (opsional) PPTK → **Unduh Presen
 
 ### Jam & salam
 Jam digital WIB tampil di bar atas; salam tampil saat masuk dan saat kembali ke aplikasi setelah ≥ 5 menit. Seluruh tampilan memakai font Arial.
+
+### Realisasi Belanja: menambah transaksi
+1. **Admin** mengisi pagu dan menugaskan **PPTK** pada tiap butir (Input Anggaran → Ubah → PPTK).
+2. **PPTK** login pada tahun/tahapan yang sama → Realisasi Belanja → *Buat transaksi baru*: pilih butir (sisa anggaran tampil di pilihan), tanggal, nilai, uraian, penyedia/metode → *Simpan sebagai draf*.
+3. Di detail transaksi: tambah pembayaran bila bertahap → **Ajukan**.
+4. **PPK/verifikator** mencatat nomor & tanggal **SP2D** per pembayaran → **Verifikasi**. Setelah itu nilainya dihitung sebagai realisasi (dasbor, LRA, laporan). Transaksi dapat dikembalikan atau dibatalkan dengan alasan.
+
+### Pencarian realisasi & sisa anggaran
+Kartu *Pencarian Realisasi & Sisa Anggaran* di halaman Realisasi Belanja: filter kegiatan, sub kegiatan, belanja, sumber dana, PPTK, kata kunci; menampilkan pagu, realisasi, menunggu SP2D, sisa, % dan total; unduh Excel/CSV.
+
+### Dasbor: peringkat capaian
+Kartu *Peringkat Capaian Realisasi Anggaran*: pilih peringkat menurut PPTK/Kegiatan/Sub Kegiatan dan periode (tahun, triwulan, atau bulan). Menampilkan 5 tertinggi dan 5 terendah menurut realisasi kumulatif s.d. akhir periode ÷ pagu.

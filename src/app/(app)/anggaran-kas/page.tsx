@@ -72,6 +72,18 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
       />
       <Flash ok={sp.ok} err={sp.err} />
 
+      <Card className="no-print">
+        <details>
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-5 py-3.5 text-sm font-semibold text-navy-800 [&::-webkit-details-marker]:hidden">Cara menambah data Anggaran Kas</summary>
+          <ol className="list-decimal space-y-1.5 border-t border-slate-100 py-4 pl-9 pr-5 text-sm text-slate-700">
+            <li><b>Admin</b>: isi pagu butir di <b>Input Anggaran</b> (versi yang dibuka) dan tetapkan <b>PPTK</b> pada tiap butir (Ubah → PPTK). Butir tanpa PPTK tidak dapat disusun kas-nya.</li>
+            <li><b>PPTK</b> login pada tahun/tahapan yang sama, buka menu ini: setiap butir miliknya tampil sebagai kartu.</li>
+            <li>Isi nominal <b>Januari–Desember</b> per butir, klik <b>Simpan draf</b> (total tidak boleh melebihi pagu). Alternatif: unduh templat Excel di bawah, isi, lalu unggah.</li>
+            <li>Klik <b>Ajukan</b>. Pejabat berwenang (PPK/admin) <b>Finalisasi</b> atau <b>Kembalikan</b> (perbaiki lalu ajukan lagi). Draf yang salah dapat dihapus.</li>
+          </ol>
+        </details>
+      </Card>
+
       {canEdit && (
         <Card className="no-print">
           <details>

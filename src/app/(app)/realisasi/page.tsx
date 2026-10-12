@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Download, Plus, Search } from "lucide-react";
 import { requireModule } from "@/lib/auth/guard";
 import { userClient } from "@/lib/supabase/server";
 import { loadSuppliersMethods } from "@/lib/lookups";
 import { STAGE_LABEL } from "@/lib/auth/context";
-import { formatRupiah } from "@/lib/format";
+import { formatPercent, formatRupiah } from "@/lib/format";
+import { loadBalanceRows } from "@/lib/realization-search";
+import { filterBalance, filterOptions, totalsOf } from "@/lib/realization-search-core";
 import { TX_STATUS } from "@/lib/status";
 import { Badge, Card, CardHeader } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
@@ -27,7 +29,7 @@ interface ItemRow {
   budget_items: { pptk_id: string | null; description: string | null; sub_activities: { code: string; name: string } | null; expenditure_accounts: { code: string } | null } | null;
 }
 
-export default async function RealisasiPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string; status?: string; q?: string }> }) {
+export default async function RealisasiPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string; status?: string; q?: string; keg?: string; sub?: string; bel?: string; dana?: string; pptk?: string; cari?: string }> }) {
   const { user, context } = await requireModule("realization.view");
   const sp = await searchParams;
   const status = sp.status && TX_STATUS[sp.status] ? sp.status : "";
@@ -39,13 +41,20 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
     .eq("budget_version_id", context.versionId).order("transaction_date", { ascending: false }).order("created_at", { ascending: false }).limit(500);
   if (status) txQuery = txQuery.eq("status", status);
 
-  const [{ data: txRaw, error }, { data: itemsRaw }, opts] = await Promise.all([
+  const [{ data: txRaw, error }, { data: itemsRaw }, opts, balance] = await Promise.all([
     txQuery,
     supabase.from("budget_item_versions")
       .select("budget_item_id, budget_items(pptk_id, description, sub_activities(code,name), expenditure_accounts(code))")
       .eq("budget_version_id", context.versionId).limit(2000),
     canCreate ? loadSuppliersMethods(supabase) : Promise.resolve(null),
+    loadBalanceRows(supabase, context.versionId),
   ]);
+  const sisaOf = new Map(balance.rows.map((r) => [r.itemId, r.sisa]));
+  const fparams = { keg: sp.keg ?? "", sub: sp.sub ?? "", bel: sp.bel ?? "", dana: sp.dana ?? "", pptk: sp.pptk ?? "", cari: sp.cari ?? "" };
+  const found = filterBalance(balance.rows, fparams);
+  const opt = filterOptions(balance.rows);
+  const tot = totalsOf(found);
+  const exportQs = new URLSearchParams(Object.entries(fparams).filter(([, v]) => v)).toString();
   const items = new Map(((itemsRaw ?? []) as unknown as ItemRow[]).map((i) => [i.budget_item_id, i.budget_items]));
   const myItems = ((itemsRaw ?? []) as unknown as ItemRow[]).filter((i) => i.budget_items?.pptk_id === user.id);
   const q = (sp.q ?? "").trim().toLowerCase().slice(0, 60);
@@ -61,6 +70,10 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
       />
       <Flash ok={sp.ok} err={sp.err} />
 
+      {!canCreate && (
+        <p className="rounded-lg border border-sky-200 bg-sky-50 px-3.5 py-2.5 text-sm text-sky-900">Transaksi baru dibuat oleh <b>PPTK</b> dari butir anggaran yang ditugaskan kepadanya. Admin menugaskan PPTK pada menu <Link href="/anggaran" className="font-semibold underline">Input Anggaran</Link> (Ubah → PPTK); PPK/verifikator memeriksa dan mencatat SP2D pada detail transaksi.</p>
+      )}
+
       {canCreate && opts && (
         <Card>
           <details>
@@ -73,7 +86,7 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
                 <Field label="Butir anggaran" htmlFor="itemId" className="sm:col-span-2">
                   <Select id="itemId" name="itemId" required defaultValue="">
                     <option value="" disabled>Pilih butir anggaran</option>
-                    {myItems.map((i) => <option key={i.budget_item_id} value={i.budget_item_id}>{i.budget_items?.sub_activities?.code} · {i.budget_items?.expenditure_accounts?.code}{i.budget_items?.description ? ` · ${i.budget_items.description}` : ""}</option>)}
+                    {myItems.map((i) => <option key={i.budget_item_id} value={i.budget_item_id}>{i.budget_items?.sub_activities?.code} · {i.budget_items?.expenditure_accounts?.code}{i.budget_items?.description ? ` · ${i.budget_items.description}` : ""} · sisa {formatRupiah(sisaOf.get(i.budget_item_id) ?? 0)}</option>)}
                   </Select>
                 </Field>
                 <Field label="Tanggal transaksi" htmlFor="date"><Input id="date" name="date" type="date" required /></Field>
@@ -90,9 +103,57 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
 
       <Card>
         <CardHeader
+          title={`Pencarian Realisasi & Sisa Anggaran (${found.length} butir)`}
+          description="Cari menurut kegiatan, sub kegiatan, belanja, sumber dana, atau PPTK. Realisasi sah = SP2D bertanggal; menunggu SP2D dan komitmen tidak dihitung."
+          actions={<>
+            <a href={`/realisasi/export?format=xlsx&${exportQs}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-9")}><Download size={14} aria-hidden /> Excel</a>
+            <a href={`/realisasi/export?format=csv&${exportQs}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-9")}><Download size={14} aria-hidden /> CSV</a>
+          </>}
+        />
+        <form action="/realisasi" className="grid gap-3 border-b border-slate-100 p-5 sm:grid-cols-2 lg:grid-cols-3">
+          {status && <input type="hidden" name="status" value={status} />}{sp.q && <input type="hidden" name="q" value={sp.q} />}
+          <Field label="Kegiatan" htmlFor="f-keg"><Select id="f-keg" name="keg" defaultValue={fparams.keg}><option value="">Semua kegiatan</option>{opt.keg.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select></Field>
+          <Field label="Sub kegiatan" htmlFor="f-sub"><Select id="f-sub" name="sub" defaultValue={fparams.sub}><option value="">Semua sub kegiatan</option>{opt.sub.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select></Field>
+          <Field label="Belanja (rekening)" htmlFor="f-bel"><Select id="f-bel" name="bel" defaultValue={fparams.bel}><option value="">Semua rekening belanja</option>{opt.bel.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select></Field>
+          <Field label="Sumber dana" htmlFor="f-dana"><Select id="f-dana" name="dana" defaultValue={fparams.dana}><option value="">Semua sumber dana</option>{opt.dana.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select></Field>
+          <Field label="PPTK" htmlFor="f-pptk"><Select id="f-pptk" name="pptk" defaultValue={fparams.pptk}><option value="">Semua PPTK</option>{opt.pptk.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}<option value="none">Belum ditugaskan</option></Select></Field>
+          <Field label="Kata kunci" htmlFor="f-cari"><Input id="f-cari" name="cari" defaultValue={fparams.cari} placeholder="uraian, kode, nama" maxLength={60} /></Field>
+          <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
+            <button className={buttonVariants({ variant: "primary" })}><Search size={16} aria-hidden /> Cari</button>
+            <Link href="/realisasi" className={buttonVariants({ variant: "outline" })}>Atur ulang</Link>
+          </div>
+        </form>
+        {balance.error ? <EmptyState title="Data tidak dapat dimuat">Muat ulang halaman atau hubungi administrator.</EmptyState>
+          : found.length === 0 ? <EmptyState title="Tidak ada butir yang cocok">Ubah atau atur ulang filter pencarian.</EmptyState>
+          : (
+          <TableWrap>
+            <table className="table-base">
+              <thead><tr><th>Sub kegiatan</th><th>Rekening</th><th>Sumber dana</th><th>PPTK</th><th className="text-right">Pagu</th><th className="text-right">Realisasi</th><th className="text-right">Menunggu SP2D</th><th className="text-right">Sisa anggaran</th><th className="text-right">%</th></tr></thead>
+              <tbody>
+                {found.map((r) => (
+                  <tr key={r.itemId}>
+                    <td><span className="font-mono text-xs text-slate-500">{r.subCode}</span><br />{r.subName}</td>
+                    <td><span className="font-mono text-xs text-slate-500">{r.accountCode}</span><br />{r.accountName}</td>
+                    <td>{r.funding || "—"}</td><td>{r.pptk || "—"}</td>
+                    <td className="num">{formatRupiah(r.pagu)}</td><td className="num">{formatRupiah(r.realisasi)}</td>
+                    <td className="num">{r.pending ? formatRupiah(r.pending) : "—"}</td>
+                    <td className={cn("num font-semibold", r.sisa < 0 && "text-red-700")}>{formatRupiah(r.sisa)}</td>
+                    <td className="num">{formatPercent(r.pct)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot><tr className="bg-slate-50 font-bold"><td colSpan={4} className="px-3 py-3 text-right">TOTAL ({found.length} butir)</td><td className="num px-3 py-3">{formatRupiah(tot.pagu)}</td><td className="num px-3 py-3">{formatRupiah(tot.realisasi)}</td><td className="num px-3 py-3">{formatRupiah(tot.pending)}</td><td className="num px-3 py-3">{formatRupiah(tot.sisa)}</td><td className="num px-3 py-3">{formatPercent(tot.pct)}</td></tr></tfoot>
+            </table>
+          </TableWrap>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader
           title={`Transaksi (${txs.length})`}
           actions={
             <form action="/realisasi" className="flex flex-wrap gap-2">
+              {Object.entries(fparams).map(([k, v]) => v ? <input key={k} type="hidden" name={k} value={v} /> : null)}
               <Select name="status" defaultValue={status} aria-label="Filter status" className="h-9 w-44">
                 <option value="">Semua status</option>
                 {Object.entries(TX_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}

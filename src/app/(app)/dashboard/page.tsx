@@ -9,6 +9,10 @@ import { formatDateTimeWIB, formatInteger, formatPercent, formatRupiah } from "@
 import { STAGE_LABEL } from "@/lib/auth/context";
 import { NAV_ITEMS } from "@/lib/nav";
 import { Alert, Card, CardHeader } from "@/components/ui/card";
+import { Field, Select } from "@/components/ui/input";
+import { buttonVariants } from "@/components/ui/button";
+import { loadQItems } from "@/lib/quarterly";
+import { DIM_LABEL, MONTH_NAMES, defaultPeriod, parsePeriod, periodLabel, periodSpan, periodValue, rankEntities, type Dim, type RankRow } from "@/lib/ranking-core";
 import { PageHeader } from "@/components/ui/page";
 
 export const metadata: Metadata = { title: "Dasbor" };
@@ -48,12 +52,17 @@ function Kpi({ icon: Icon, label, value, hint, tone = "navy" }: {
   );
 }
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ akses?: string }> }) {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ akses?: string; dim?: string; per?: string }> }) {
   const { user, context } = await requireContext();
   const sp = await searchParams;
   const supabase = await userClient();
   const { data, error } = await supabase.rpc("dashboard_kpis", { p_version: context.versionId });
   const k = (Array.isArray(data) ? data[0] : data) as Kpis | undefined;
+
+  const dim: Dim = sp.dim === "kegiatan" || sp.dim === "sub" ? sp.dim : "pptk";
+  const period = parsePeriod(sp.per, defaultPeriod(context.year, new Date()));
+  const q = await loadQItems(supabase, context, user.organizationId, periodSpan(context.year, period).end);
+  const ranking = rankEntities(q.items, context.year, dim, period);
 
   const sisa = Number(k?.sisa_anggaran ?? 0);
   const over = sisa < 0;
@@ -119,6 +128,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </>
       )}
 
+      <RankingCard rows={ranking} dim={dim} period={period} year={context.year} error={q.error} />
+
       {shortcuts.length > 0 && (
         <Card>
           <CardHeader title="Pintasan modul" description="Menu yang tersedia sesuai peran Anda." />
@@ -135,5 +146,60 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </Card>
       )}
     </div>
+  );
+}
+
+function RankList({ title, tone, rows, offset }: { title: string; tone: "up" | "down"; rows: RankRow[]; offset: (i: number) => number }) {
+  const bar = tone === "up" ? "bg-emerald-500" : "bg-red-500";
+  return (
+    <div>
+      <p className="mb-3 text-sm font-semibold text-navy-900">{title}</p>
+      <ol className="space-y-3">
+        {rows.map((r, i) => (
+          <li key={r.key} className="grid grid-cols-[2rem_1fr_auto] items-start gap-x-3">
+            <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${tone === "up" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{offset(i)}</span>
+            <div className="min-w-0">
+              <p className="break-words text-sm font-medium text-slate-900">{r.code && <span className="mr-1 text-xs text-slate-500">{r.code}</span>}{r.name}</p>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100" role="presentation"><div className={`h-full rounded-full ${bar}`} style={{ width: `${Math.max(0, Math.min(100, r.pctPagu))}%` }} /></div>
+              <p className="mt-1 text-xs text-slate-500">Periode ini {formatRupiah(r.realPeriod)} · kumulatif {formatRupiah(r.realCum)} dari pagu {formatRupiah(r.pagu)}{r.pctKas !== null ? ` · ${formatPercent(r.pctKas)} dari target kas` : ""}</p>
+            </div>
+            <p className="text-right font-display text-lg font-bold tabular-nums text-navy-900">{formatPercent(r.pctPagu)}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function RankingCard({ rows, dim, period, year, error }: { rows: RankRow[]; dim: Dim; period: ReturnType<typeof parsePeriod>; year: number; error: string | null }) {
+  const N = 5;
+  const high = rows.slice(0, N);
+  const low = [...rows].reverse().slice(0, N);
+  const split = rows.length > N;
+  return (
+    <Card>
+      <CardHeader title="Peringkat Capaian Realisasi Anggaran" description={`Menurut ${DIM_LABEL[dim]} · ${periodLabel(period, year)}. Diurutkan dari realisasi kumulatif s.d. akhir periode terhadap pagu (realisasi sah: SP2D bertanggal).`} />
+      <form action="/dashboard" className="flex flex-wrap items-end gap-3 border-b border-slate-100 px-5 py-4">
+        <Field label="Peringkat menurut" htmlFor="dim">
+          <Select id="dim" name="dim" defaultValue={dim} className="w-44">{(Object.keys(DIM_LABEL) as Dim[]).map((d) => <option key={d} value={d}>{DIM_LABEL[d]}</option>)}</Select>
+        </Field>
+        <Field label="Periode" htmlFor="per">
+          <Select id="per" name="per" defaultValue={periodValue(period)} className="w-52">
+            <option value="y">Seluruh tahun (s.d. kini)</option>
+            <optgroup label="Triwulanan">{[1, 2, 3, 4].map((n) => <option key={n} value={`q${n}`}>Triwulan {["I", "II", "III", "IV"][n - 1]}</option>)}</optgroup>
+            <optgroup label="Bulanan">{MONTH_NAMES.map((m, i) => <option key={m} value={`m${i + 1}`}>{m}</option>)}</optgroup>
+          </Select>
+        </Field>
+        <button className={buttonVariants({ variant: "primary" })}>Tampilkan</button>
+      </form>
+      {error ? <p className="p-5 text-sm text-red-700">Data peringkat tidak dapat dimuat sepenuhnya. Muat ulang halaman.</p>
+        : rows.length === 0 ? <p className="p-5 text-sm text-slate-600">Belum ada data pagu untuk diperingkatkan pada konteks ini.</p>
+        : (
+        <div className={`grid gap-8 p-5 ${split ? "lg:grid-cols-2" : ""}`}>
+          <RankList title={split ? `${N} tertinggi` : "Peringkat (tertinggi ke terendah)"} tone="up" rows={high} offset={(i) => i + 1} />
+          {split && <RankList title={`${N} terendah`} tone="down" rows={low} offset={(i) => rows.length - i} />}
+        </div>
+      )}
+    </Card>
   );
 }
