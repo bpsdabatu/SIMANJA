@@ -42,3 +42,11 @@ Semua penulisan data memakai fungsi database `SECURITY INVOKER` (migrasi 0006) s
 - Modul baru: `lib/spreadsheet`, `lib/master-import`, `lib/budget-items`, `lib/quarterly-core|quarterly|quarterly-pdf|quarterly-pptx`, `lib/wib`, `components/clock-greeting`, halaman `/laporan-triwulan`.
 - Font Arial menggantikan Inter/Montserrat. Menu baru memakai izin `recap.view`/`recap.export` (tanpa izin baru).
 - **Belum diuji** terhadap Supabase nyata: terapkan 0007 pada staging dan jalankan `npm run test:db` sebelum produksi.
+
+## Perubahan: Realisasi, Anggaran Kas, Dasbor
+- Migrasi **0008** (aditif, idempotent): `set_cash_plan_status` tidak lagi menolak pengajuan bila total kas = 0; rencana 12 bulan tetap harus tersimpan. Total kas > pagu tetap ditolak oleh `save_cash_plan`.
+- `lib/cash-core.ts` (hitung kas murni + `tests/cash-core.test.ts`), `anggaran-kas/cash-plan-form.tsx` (hitung langsung, bagi rata, Simpan & ajukan), rekap triwulan di halaman dan lembar Excel.
+- Realisasi: kartu posisi transaksi, penjelasan lokasi data, sorotan baris baru + gulir otomatis, tombol "Isi seluruh sisa".
+- Dasbor: `components/dashboard-charts.tsx` (grafik SVG tanpa pustaka tambahan), kartu berwarna.
+- Ditambahkan `.env.example` (tidak ada di zip sebelumnya; diperlukan `tests/security-static.test.ts`).
+- Hasil: `tsc --noEmit` bersih, `vitest` 108/108 lulus, `next build` sukses. **Belum diuji** terhadap Supabase nyata/visual browser: terapkan 0008 pada staging dan jalankan `npm run test:db`.
