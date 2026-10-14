@@ -5,7 +5,6 @@ import { userClient } from "@/lib/supabase/server";
 import { flashRedirect } from "@/lib/flash";
 import { friendlyError, isUuid, num, optStr, runAction, str } from "@/lib/action-utils";
 import { parseMoney } from "@/lib/csv";
-import { parseAmount } from "@/lib/cash-core";
 import { normHeader, readTable } from "@/lib/spreadsheet";
 
 const BACK = "/anggaran-kas";
@@ -23,29 +22,14 @@ export async function saveCashPlanAction(fd: FormData): Promise<void> {
   const months: number[] = [];
   for (let m = 1; m <= 12; m++) {
     const raw = String(fd.get(`m${m}`) ?? "").trim();
-    const v = raw === "" ? 0 : parseAmount(raw);
+    const v = raw === "" ? 0 : num(fd, `m${m}`);
     if (!Number.isFinite(v) || v < 0) flashRedirect(BACK, { err: `Nilai bulan ke-${m} tidak valid.` });
     months.push(v);
   }
   const supabase = await userClient();
-  let planId = "";
-  let message = "";
-  try {
-    const { data, error } = await supabase.rpc("save_cash_plan", { p_version: versionId, p_item: item, p_months: months });
-    if (error) message = friendlyError(error); else planId = String(data);
-  } catch { message = "Terjadi kesalahan pada sistem. Silakan coba lagi."; }
-  if (message) flashRedirect(BACK, { err: message });
-
-  if (str(fd, "intent", 10) === "submit") {
-    let submitErr = "";
-    try {
-      const { error } = await supabase.rpc("set_cash_plan_status", { p_plan: planId, p_to: "submitted", p_reason: null });
-      if (error) submitErr = friendlyError(error);
-    } catch { submitErr = "Terjadi kesalahan pada sistem."; }
-    if (submitErr) flashRedirect(BACK, { err: `Tersimpan sebagai draf, tetapi belum dapat diajukan: ${submitErr}` });
-    flashRedirect(BACK, { ok: "Anggaran kas disimpan dan diajukan." });
-  }
-  flashRedirect(BACK, { ok: "Anggaran kas disimpan sebagai draf. Klik “Simpan & ajukan” bila sudah benar." });
+  return runAction(BACK, "Anggaran kas disimpan sebagai draf.", async () =>
+    supabase.rpc("save_cash_plan", { p_version: versionId, p_item: item, p_months: months }),
+  );
 }
 
 export async function cashStatusAction(fd: FormData): Promise<void> {

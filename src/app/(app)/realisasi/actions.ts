@@ -53,17 +53,16 @@ export async function createTransactionAction(fd: FormData): Promise<void> {
   } catch { message = "Terjadi kesalahan pada sistem. Silakan coba lagi."; }
   if (message) flashRedirect(back, { err: message });
 
-  const where = `/realisasi?baru=${id}`;
   if (str(fd, "intent", 10) === "submit") {
     let submitErr = "";
     try {
       const { error } = await supabase.rpc("submit_transaction", { p_tx: id });
       if (error) submitErr = friendlyError(error);
     } catch { submitErr = "Terjadi kesalahan pada sistem."; }
-    if (submitErr) flashRedirect(where, { err: `Transaksi tersimpan sebagai draf (lihat tabel Transaksi di bawah), tetapi belum dapat diajukan: ${submitErr}` });
-    flashRedirect(where, { ok: "Transaksi tersimpan dan diajukan. Lokasinya: tabel Transaksi di bawah (baris disorot). Menjadi realisasi setelah SP2D & verifikasi." });
+    if (submitErr) flashRedirect(detail(id), { err: `Transaksi tersimpan sebagai draf, tetapi belum dapat diajukan: ${submitErr}` });
+    flashRedirect(detail(id), { ok: "Transaksi dibuat dan diajukan untuk verifikasi." });
   }
-  flashRedirect(where, { ok: "Transaksi tersimpan sebagai draf di tabel Transaksi di bawah (baris disorot). Klik uraiannya untuk menambah pembayaran atau mengajukan." });
+  flashRedirect(detail(id), { ok: "Transaksi draf dibuat. Tambahkan pembayaran bila perlu, lalu ajukan." });
 }
 
 function txId(fd: FormData): string {

@@ -5,12 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarClock, ChevronDown, Database, FileBarChart, Files, KeyRound, LayoutDashboard, LogOut, Menu,
-  PanelLeftClose, PanelLeftOpen, Presentation, Receipt, ScrollText, TableProperties, Users, Wallet, X,
+  PanelLeftClose, PanelLeftOpen, Presentation, Receipt, ScrollText, Search, TableProperties, Users, Wallet, X,
   type LucideIcon,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions";
 import { DigitalClock, GreetingBanner, resetGreeting } from "@/components/clock-greeting";
 import { LogoBadge } from "@/components/brand/logo";
+import { CommandPalette } from "@/components/command-palette";
 import type { IconName, NavItem } from "@/lib/nav";
 import { APP_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,8 @@ interface Props {
   user: { fullName: string; username: string; roleLabels: string[] };
   context: { year: number; stageLabel: string };
   items: NavItem[];
+  /** Jumlah pekerjaan menunggu per href menu. */
+  badges?: Record<string, number>;
   children: React.ReactNode;
 }
 
@@ -32,16 +35,27 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("") || "U";
 }
 
-export function AppShell({ user, context, items, children }: Props) {
+export function AppShell({ user, context, items, badges = {}, children }: Props) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  const [palette, setPalette] = useState(false);
+  const current = items.find((i) => pathname === i.href || pathname.startsWith(i.href + "/"));
 
   // Ingat status sidebar per browser (kenyamanan saja; aman bila storage gagal)
   useEffect(() => {
     try { setCollapsed(localStorage.getItem("simaspraja.sidebar") === "1"); } catch { /* abaikan */ }
   }, []);
   useEffect(() => { setDrawer(false); }, [pathname]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette((v) => !v); } };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  useEffect(() => {
+    document.body.style.overflow = drawer || palette ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [drawer, palette]);
   useEffect(() => {
     if (!drawer) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawer(false);
@@ -80,13 +94,20 @@ export function AppShell({ user, context, items, children }: Props) {
                     aria-current={active ? "page" : undefined}
                     title={compact ? item.label : undefined}
                     className={cn(
-                      "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                      active ? "bg-white/10 text-white" : "text-navy-100/90 hover:bg-white/5 hover:text-white",
+                      "group relative flex min-h-[40px] items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                      active ? "bg-white/12 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.08)]" : "text-navy-100/90 hover:translate-x-0.5 hover:bg-white/5 hover:text-white",
                     )}
                   >
                     {active && <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r bg-gold-400" aria-hidden />}
                     <Icon size={18} aria-hidden className={cn("shrink-0", active && "text-gold-300")} />
-                    {!compact && <span className="truncate">{item.label}</span>}
+                    {!compact && <span className="flex-1 truncate">{item.label}</span>}
+                    {badges[item.href] ? (
+                      <span
+                        className={cn("flex h-5 min-w-5 items-center justify-center rounded-full bg-gold-400 px-1.5 text-[11px] font-bold text-navy-950", compact && "absolute right-1.5 top-1 h-4 min-w-4 px-1 text-[10px]")}
+                        aria-label={`${badges[item.href]} menunggu tindakan`}
+                        title={`${badges[item.href]} menunggu tindakan Anda`}
+                      >{badges[item.href]! > 99 ? "99+" : badges[item.href]}</span>
+                    ) : null}
                   </Link>
                 </li>
               );
@@ -118,6 +139,15 @@ export function AppShell({ user, context, items, children }: Props) {
         <div className="sticky top-0 flex h-screen flex-col">
           {brand(collapsed)}
           {nav(collapsed)}
+          <div className={cn("mx-3 mb-2 flex items-center gap-3 rounded-xl bg-white/5 p-2.5", collapsed && "justify-center bg-transparent p-0")}>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold-400 text-xs font-bold text-navy-950" title={collapsed ? user.fullName : undefined}>{initials(user.fullName)}</span>
+            {!collapsed && (
+              <span className="min-w-0 leading-tight">
+                <span className="block truncate text-sm font-semibold text-white">{user.fullName}</span>
+                <span className="block truncate text-[11px] text-navy-200">{user.roleLabels.join(", ") || "Tanpa peran"}</span>
+              </span>
+            )}
+          </div>
           <button
             onClick={toggle}
             aria-label={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
@@ -155,12 +185,15 @@ export function AppShell({ user, context, items, children }: Props) {
           <button
             onClick={() => setDrawer(true)}
             aria-label="Buka menu"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 lg:hidden"
+            aria-expanded={drawer}
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 lg:hidden"
           >
             <Menu size={20} aria-hidden />
           </button>
 
-          <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+          <div className="flex min-w-0 flex-1 items-center gap-3 text-sm">
+            {current && <span className="hidden truncate font-display text-base font-bold text-navy-900 md:block">{current.label}</span>}
+            {current && <span className="hidden h-5 w-px bg-slate-200 md:block" aria-hidden />}
             <span className="inline-flex items-center gap-1.5 rounded-full bg-gold-50 px-3 py-1 font-semibold text-gold-700 ring-1 ring-gold-200" title="Konteks anggaran aktif">
               TA {context.year} · {context.stageLabel}
             </span>
@@ -168,6 +201,16 @@ export function AppShell({ user, context, items, children }: Props) {
               Ganti
             </Link>
           </div>
+
+          <button
+            onClick={() => setPalette(true)}
+            className="hidden items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-500 transition-colors hover:border-navy-300 hover:bg-white hover:text-navy-700 sm:flex"
+            aria-label="Cari menu (Ctrl+K)"
+          >
+            <Search size={15} aria-hidden /> <span className="hidden xl:inline">Cari menu</span>
+            <kbd className="rounded border border-slate-200 bg-white px-1.5 text-[10px] text-slate-500">Ctrl K</kbd>
+          </button>
+          <button onClick={() => setPalette(true)} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 sm:hidden" aria-label="Cari menu"><Search size={19} aria-hidden /></button>
 
           <DigitalClock />
 
@@ -199,6 +242,7 @@ export function AppShell({ user, context, items, children }: Props) {
           </details>
         </header>
 
+        <CommandPalette items={items} open={palette} onClose={() => setPalette(false)} />
         <GreetingBanner name={user.fullName} />
         <main id="konten" className="flex-1 px-4 py-6 sm:px-8 sm:py-8">{children}</main>
 

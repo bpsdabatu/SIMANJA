@@ -6,7 +6,6 @@ import { buildXlsx, xlsxHeaders } from "@/lib/spreadsheet";
 import { loadBudgetItems } from "@/lib/budget-items";
 import { fetchAll } from "@/lib/fetch-all";
 import { STAGE_LABEL } from "@/lib/auth/context";
-import { allocation, quarterSums } from "@/lib/cash-core";
 
 export const dynamic = "force-dynamic";
 
@@ -48,31 +47,9 @@ export async function GET(req: NextRequest) {
   const base = `anggaran-kas-${ctx.year}-${ctx.stage}`;
   if (req.nextUrl.searchParams.get("format") === "csv") return new NextResponse(toCsv([header, ...body]), { headers: csvResponseHeaders(`${base}.csv`) });
   const money = Array.from({ length: 19 }, (_, i) => 6 + i);
-
-  // Lembar 2: rekap per triwulan (pagu, TW I-IV, total kas, sisa belum diinput) per butir + total.
-  const recapHeader = ["Kode Sub Kegiatan", "Sub Kegiatan", "Kode Rekening", "Rekening Belanja", "PPTK", "Pagu", "TW I", "TW II", "TW III", "TW IV", "Total Kas (Sudah Diinput)", "Sisa Belum Diinput", "Status"];
-  const recapTw = [0, 0, 0, 0];
-  let recapKas = 0;
-  const recapRows: (string | number)[][] = items.map((r) => {
-    const p = planOf.get(r.itemId);
-    const m = MONTHS.map((_, i) => Number(p?.cash_budget_periods.find((x) => x.period_type === "month" && x.period_no === i + 1)?.amount ?? 0));
-    const q = quarterSums(m);
-    const al = allocation(r.pagu, m);
-    q.forEach((v, i) => { recapTw[i]! += v; });
-    recapKas += al.input;
-    return [r.subCode, r.subName, r.accountCode, r.accountName, r.pptk, r.pagu, ...q, al.input, al.sisa, p ? (STATUS[p.status] ?? p.status) : "Belum disusun"];
-  });
-  recapRows.push(["", "", "", "", "TOTAL", totalPagu, ...recapTw, recapKas, Math.round((totalPagu - recapKas) * 100) / 100, ""]);
-
-  const buf = await buildXlsx([
-    {
-      name: "Anggaran Kas", title: [`Anggaran Kas — Tahun Anggaran ${ctx.year} (${STAGE_LABEL[ctx.stage]})`],
-      header, rows: body, widths: [16, 30, 16, 30, 26, 22, 16, ...Array(12).fill(14), 16, 15, 15, 15, 15, 18, 14], moneyCols: money,
-    },
-    {
-      name: "Rekap Triwulan", title: [`Rekapitulasi Anggaran Kas per Triwulan — Tahun Anggaran ${ctx.year} (${STAGE_LABEL[ctx.stage]})`],
-      header: recapHeader, rows: recapRows, widths: [16, 30, 16, 30, 22, 17, 16, 16, 16, 16, 20, 20, 14], moneyCols: [5, 6, 7, 8, 9, 10, 11],
-    },
-  ]);
+  const buf = await buildXlsx([{
+    name: "Anggaran Kas", title: [`Anggaran Kas — Tahun Anggaran ${ctx.year} (${STAGE_LABEL[ctx.stage]})`],
+    header, rows: body, widths: [16, 30, 16, 30, 26, 22, 16, ...Array(12).fill(14), 16, 15, 15, 15, 15, 18, 14], moneyCols: money,
+  }]);
   return new NextResponse(new Uint8Array(buf), { headers: xlsxHeaders(`${base}.xlsx`) });
 }

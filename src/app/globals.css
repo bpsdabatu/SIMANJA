@@ -13,6 +13,10 @@ body { @apply bg-slate-50 text-slate-800 antialiased; font-family: var(--font-sa
 code, kbd, samp, pre, input, select, textarea, button, table { font-family: var(--font-sans); }
 h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0.01em; }
 
+::selection { background: rgba(194,157,77,.35); }
+/* Gulir sidebar/tabel lebih halus */
+nav, .overflow-x-auto { scrollbar-width: thin; scrollbar-color: rgba(100,116,139,.4) transparent; }
+
 /* Indikator fokus jelas untuk akses keyboard */
 :focus-visible { @apply outline-2 outline-offset-2 outline-navy-500; }
 
@@ -29,6 +33,8 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
   .table-base tbody td { @apply border-b border-slate-100 px-3 py-2.5 align-top; }
   .table-base tbody tr:hover td { @apply bg-navy-50/40; }
   .num { @apply text-right tabular-nums; }
+  .table-base tbody tr:nth-child(even) td { @apply bg-slate-50/50; }
+  .table-base tbody tr:hover td { @apply bg-navy-50/60; }
 }
 
 @media (prefers-reduced-motion: reduce) {
