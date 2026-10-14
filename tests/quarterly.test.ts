@@ -115,3 +115,10 @@ describe("aturan transaksi belanja", () => {
   });
   it("sisa tersedia = pagu − realisasi − menunggu SP2D", () => expect(availableOf(1000, 300, 200.5)).toBe(499.5));
 });
+
+import { NAV_ITEMS } from "../src/lib/nav";
+describe("navigasi", () => {
+  it("setiap menu punya keterangan untuk palet menu", () => {
+    for (const i of NAV_ITEMS) expect(i.hint.length, i.label).toBeGreaterThan(5);
+  });
+});

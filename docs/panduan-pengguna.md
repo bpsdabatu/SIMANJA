@@ -66,16 +66,7 @@ Kartu *Peringkat Capaian Realisasi Anggaran*: pilih peringkat menurut PPTK/Kegia
 Form *Buat transaksi baru* kini 4 langkah: cari & pilih butir (atau klik **Buat transaksi** pada baris hasil pencarian) → tanggal (bawaan hari ini WIB) → nilai → uraian. Ringkasan pagu/realisasi/menunggu SP2D/**sisa tersedia** tampil langsung beserta sisa setelah transaksi. Tombol **Simpan & ajukan verifikasi** menyimpan dan mengirim sekaligus; **Simpan sebagai draf** bila masih ada pembayaran lain.
 Pemeriksaan otomatis (juga di server): nilai ≤ sisa tersedia (pagu − realisasi − menunggu SP2D), tanggal pada tahun anggaran dan tidak melewati hari ini, maksimal 2 desimal, serta peringatan transaksi ganda (butir+tanggal+nilai sama) yang harus dikonfirmasi. Aturan nilai ≤ sisa juga berlaku saat menambah pembayaran.
 
-### Realisasi Belanja: di mana data yang saya input?
-Setiap transaksi tersimpan di halaman **Realisasi Belanja → kartu Transaksi** (paling bawah; baris yang baru disimpan disorot dan halaman otomatis menggulir ke sana). Klik uraian untuk detail, pembayaran, dan SP2D. Di bagian atas halaman, lima kartu berwarna menunjukkan posisi transaksi (Draf, Dikembalikan, Diajukan, Proses SP2D, Realisasi) beserta jumlah dan nilainya; klik kartu untuk memfilter.
-Nilai transaksi **baru dihitung sebagai realisasi** (pencarian realisasi, Dasbor, Rekapitulasi, LRA, Laporan Triwulanan) setelah berstatus *Realisasi* (SP2D bertanggal + verifikasi). Sebelum itu tampil sebagai *Menunggu SP2D*. Pada form tersedia tombol **Isi seluruh sisa** untuk mengisi nilai sebesar sisa tersedia.
-
-### Anggaran Kas: input per belanja, sisa, dan rekap triwulan
-- Form tiap butir menghitung **langsung**: Pagu, **Sudah diinput**, **Sisa belum diinput** (atau *Melebihi pagu*), bilah persentase, dan jumlah per **TW I–IV**. Tombol bantu: *Bagi rata ke 12 bulan*, *Bagi rata per triwulan*, *Taruh sisa di bulan terakhir terisi*, *Kosongkan*.
-- **Simpan draf** atau **Simpan & ajukan** (sekali klik). Total kas boleh kurang dari pagu (sisa tetap terlihat) tetapi tidak boleh melebihi pagu.
-- **Anggaran 0 dapat diajukan.** Butir berpagu Rp 0 cukup diklik *Simpan & ajukan*. Butir berpagu > 0 yang total kasnya 0 juga dapat diajukan (berarti tidak ada penarikan kas). Memerlukan migrasi **0008**.
-- Kartu **Rekapitulasi Anggaran Kas per Triwulan** (tampil juga saat dicetak) berisi total TW I–IV, % terhadap pagu, dan tabel per butir (pagu, TW I–IV, total kas, sisa belum diinput, status). Unduhan Excel memuat lembar **Rekap Triwulan**.
-- Filter kata kunci dan status di atas daftar butir.
-
-### Dasbor
-Tampilan baru: kartu capaian dengan cincin persentase, 8 kartu indikator dengan warna berbeda per data, grafik **Target Kas vs Realisasi per Triwulan**, donat **Komposisi Pagu** (realisasi/menunggu SP2D/sisa), bilah **Posisi Transaksi** dan **Status Anggaran Kas**, peringkat berwarna, dan pintasan modul berikon.
+### Navigasi
+- **Cari menu cepat**: tekan **Ctrl/⌘ + K** (atau tombol *Cari menu* di bar atas) lalu ketik; ↑ ↓ memilih, Enter membuka.
+- **Lencana emas** pada menu = jumlah pekerjaan yang menunggu tindakan Anda (verifikator: transaksi/kas diajukan; PPTK: yang dikembalikan).
+- Bar atas menampilkan nama menu aktif; sidebar dapat diciutkan dan kartu profil ada di bagian bawah. Di ponsel, menu terbuka sebagai laci dan halaman tidak ikut tergulir.
