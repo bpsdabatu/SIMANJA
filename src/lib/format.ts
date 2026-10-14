@@ -44,3 +44,11 @@ export function formatDateTimeWIB(iso: string | Date | null | undefined): string
     }).format(d) + " WIB"
   );
 }
+
+const amountFmt = new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+/** Angka rupiah tanpa simbol untuk tabel padat ("1.170.000"). Sen ditampilkan hanya bila ada, sehingga tidak ada nilai yang dibulatkan diam-diam. */
+export function formatAmount(value: number | string | null | undefined): string {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? amountFmt.format(n) : "0";
+}

@@ -20,19 +20,19 @@ export function PrintHeader({ orgName, title, subtitle }: { orgName: string; tit
 }
 
 /** Blok tanda tangan; nama/jabatan dikosongkan agar diisi sesuai ketentuan instansi. */
-export function SignatureBlock({ place = "" }: { place?: string }) {
-  const cell = (role: string) => (
+export function SignatureBlock({ place = "", kpa }: { place?: string; kpa?: { name: string; nip: string; title: string } | null }) {
+  const cell = (role: string, who?: { name: string; nip: string } | null) => (
     <div className="text-center">
       <p>{role}</p>
       <div className="h-20" />
-      <p className="border-t border-slate-700 pt-1">(............................................)</p>
-      <p className="text-xs">NIP. ......................................</p>
+      <p className="border-t border-slate-700 pt-1">{who ? <span className="font-semibold underline">{who.name}</span> : "(............................................)"}</p>
+      <p className="text-xs">NIP. {who?.nip || "......................................"}</p>
     </div>
   );
   return (
     <div className="print-only mt-8 break-inside-avoid text-sm">
       <p className="mb-3 text-right">{place ? `${place}, ` : ""}{new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" })}</p>
-      <div className="grid grid-cols-3 gap-8">{cell("Mengetahui,")}{cell("Pejabat Penatausahaan Keuangan")}{cell("Penyusun Laporan")}</div>
+      <div className="grid grid-cols-3 gap-8">{kpa ? cell(`${kpa.title},`, kpa) : cell("Mengetahui,")}{cell("Pejabat Penatausahaan Keuangan")}{cell("Penyusun Laporan")}</div>
     </div>
   );
 }
