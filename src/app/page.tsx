@@ -17,8 +17,8 @@ export const metadata: Metadata = {
 const FEATURES = [
   { icon: Wallet, title: "Perencanaan Anggaran", text: "Input pagu per butir anggaran dengan versi Murni, Pergeseran, dan Perubahan yang dapat difinalisasi." },
   { icon: CalendarClock, title: "Anggaran Kas", text: "Rencana kas bulanan per butir anggaran, diajukan PPTK dan difinalisasi sesuai alur persetujuan." },
-  { icon: Receipt, title: "Realisasi Belanja", text: "Pencatatan transaksi, pembayaran, dan SP2D. Realisasi sah hanya dari SP2D bertanggal." },
-  { icon: BarChart3, title: "Rekapitulasi", text: "Pagu, realisasi, sisa, dan persentase per sub kegiatan dan rekening, siap diunduh." },
+  { icon: Receipt, title: "Input Realisasi", text: "Input realisasi cukup dengan tanggal SP2D, langsung tercatat tanpa verifikasi. Realisasi sah hanya dari SP2D bertanggal." },
+  { icon: BarChart3, title: "Rekapitulasi", text: "Pagu, realisasi, sisa, dan persentase per sub kegiatan dan rekening, dengan filter program hingga PPTK, siap diunduh." },
   { icon: FileBarChart, title: "Laporan Realisasi Anggaran", text: "LRA berjenjang program–kegiatan–sub kegiatan dengan tampilan cetak resmi." },
   { icon: Files, title: "Dokumen Pengadaan", text: "Alur Nota Dinas, DPP, reviu PPBJ, dan Berita Acara Reviu dengan riwayat revisi." },
   { icon: Database, title: "Data Master", text: "Program, kegiatan, sub kegiatan, rekening, sumber dana, metode, penyedia, dan RUP." },

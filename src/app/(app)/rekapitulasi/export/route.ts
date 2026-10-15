@@ -2,22 +2,29 @@ import { NextResponse, type NextRequest } from "next/server";
 import { userClient } from "@/lib/supabase/server";
 import { getBudgetContext, getSessionUser } from "@/lib/auth/session";
 import { csvResponseHeaders, toCsv } from "@/lib/csv";
-import { loadReport } from "@/lib/reports";
+import { buildXlsx, xlsxHeaders } from "@/lib/spreadsheet";
+import { loadBalanceRows } from "@/lib/realization-search";
+import { filterBalance, totalsOf } from "@/lib/realization-search-core";
+import { STAGE_LABEL } from "@/lib/auth/context";
 
 export const dynamic = "force-dynamic";
 
+/** Unduh rekapitulasi realisasi & sisa anggaran (filter sama dengan halaman). ?format=xlsx (bawaan) | csv */
 export async function GET(req: NextRequest) {
   const user = await getSessionUser();
   if (!user || !user.permissions.has("recap.export")) return new NextResponse("Tidak berwenang", { status: 403 });
   const ctx = await getBudgetContext();
   if (!ctx) return new NextResponse("Konteks anggaran belum dipilih", { status: 409 });
-
-  const q = (req.nextUrl.searchParams.get("q") ?? "").trim().toLowerCase().slice(0, 60);
-  const { rows: all, error } = await loadReport(await userClient(), ctx.versionId);
+  const sp = req.nextUrl.searchParams;
+  const { rows: all, error } = await loadBalanceRows(await userClient(), ctx.versionId);
   if (error) return new NextResponse("Data tidak dapat dimuat", { status: 500 });
-  const rows = q ? all.filter((r) => [r.subCode, r.subName, r.accountCode, r.accountName, r.pptk, r.description].some((x) => x.toLowerCase().includes(q))) : all;
-
-  const out: unknown[][] = [["Kode Sub Kegiatan", "Sub Kegiatan", "Kode Rekening", "Rekening", "Uraian", "Sumber Dana", "PPTK", "Pagu", "Realisasi", "Menunggu SP2D", "Komitmen Kontrak", "Sisa", "Persentase Realisasi"]];
-  for (const r of rows) out.push([r.subCode, r.subName, r.accountCode, r.accountName, r.description, r.funding, r.pptk, r.pagu, r.realisasi, r.pending, r.komitmen, r.sisa, r.pct ?? ""]);
-  return new NextResponse(toCsv(out), { headers: csvResponseHeaders(`rekapitulasi-${ctx.year}-${ctx.stage}.csv`) });
+  const rows = filterBalance(all, { prog: sp.get("prog") ?? "", keg: sp.get("keg") ?? "", sub: sp.get("sub") ?? "", bel: sp.get("bel") ?? "", dana: sp.get("dana") ?? "", pptk: sp.get("pptk") ?? "", cari: sp.get("cari") ?? "" });
+  const t = totalsOf(rows);
+  const header = ["Kode Program", "Program", "Kode Kegiatan", "Kegiatan", "Kode Sub Kegiatan", "Sub Kegiatan", "Kode Rekening", "Rekening Belanja", "Uraian", "Sumber Dana", "PPTK", "Pagu", "Realisasi", "Menunggu SP2D (data lama)", "Komitmen Kontrak", "Sisa Anggaran", "% Realisasi"];
+  const body = rows.map((r) => [r.programCode, r.programName, r.activityCode, r.activityName, r.subCode, r.subName, r.accountCode, r.accountName, r.description, r.funding, r.pptk, r.pagu, r.realisasi, r.pending, r.komitmen, r.sisa, r.pct ?? ""]);
+  const foot = ["", "", "", "", "", "", "", "", "", "", "TOTAL", t.pagu, t.realisasi, t.pending, t.komitmen, t.sisa, t.pct ?? ""];
+  const base = `rekapitulasi-${ctx.year}-${ctx.stage}`;
+  if (sp.get("format") === "csv") return new NextResponse(toCsv([header, ...body, foot]), { headers: csvResponseHeaders(`${base}.csv`) });
+  const buf = await buildXlsx([{ name: "Rekapitulasi", title: [`Rekapitulasi Realisasi dan Sisa Anggaran — TA ${ctx.year} (${STAGE_LABEL[ctx.stage]})`], header, rows: [...body, foot], widths: [12, 28, 14, 28, 16, 34, 16, 32, 28, 22, 22, 18, 18, 16, 18, 18, 12], moneyCols: [11, 12, 13, 14, 15] }]);
+  return new NextResponse(new Uint8Array(buf), { headers: xlsxHeaders(`${base}.xlsx`) });
 }

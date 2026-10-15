@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  AlertTriangle, ArrowRight, Banknote, Clock, FileSearch, ListChecks, Percent, PiggyBank, TrendingUp,
+  AlertTriangle, ArrowRight, Banknote, FileSearch, ListChecks, Percent, PiggyBank, TrendingUp,
 } from "lucide-react";
 import { requireContext } from "@/lib/auth/session";
 import { userClient } from "@/lib/supabase/server";
@@ -109,7 +109,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <Kpi icon={PiggyBank} label="Sisa Anggaran" value={formatRupiah(k.sisa_anggaran)} hint="Pagu − realisasi sah" tone={over ? "red" : "navy"} />
             <Kpi icon={Percent} label="Persentase Realisasi" value={formatPercent(k.pct_realisasi)} hint={k.pct_realisasi === null ? "Pagu 0: persentase tidak dihitung" : undefined} />
             <Kpi icon={ListChecks} label="Butir Anggaran Aktif" value={formatInteger(k.jumlah_butir_aktif)} />
-            <Kpi icon={Clock} label="Transaksi Menunggu SP2D" value={formatInteger(k.jumlah_menunggu_sp2d)} hint={`Nilai: ${formatRupiah(k.total_menunggu_sp2d)}`} tone={k.jumlah_menunggu_sp2d > 0 ? "gold" : "navy"} />
             <Kpi icon={FileSearch} label="Dokumen Menunggu Reviu" value={formatInteger(k.jumlah_dokumen_reviu)} />
             <Kpi icon={Banknote} label="Komitmen Kontrak" value={formatRupiah(k.total_komitmen)} hint="Dicatat terpisah; bukan realisasi" />
           </section>
@@ -123,7 +122,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
           <p className="text-xs text-slate-500">
             Dihitung pada {formatDateTimeWIB(k.dihitung_pada)}. Definisi: realisasi sah = transaksi berstatus realisasi dengan SP2D bertanggal dan tidak dibatalkan.
-            Menunggu SP2D dan komitmen kontrak ditampilkan terpisah dan tidak pernah dijumlahkan ke realisasi.
+            Komitmen kontrak ditampilkan terpisah dan tidak pernah dijumlahkan ke realisasi.
           </p>
         </>
       )}
