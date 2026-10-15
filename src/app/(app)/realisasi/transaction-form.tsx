@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { checkTransaction } from "@/lib/tx-rules";
+import { similarSuppliers } from "@/lib/supplier-input";
 import { createTransactionAction } from "./actions";
 
 export interface TxItem { id: string; subCode: string; subName: string; accountCode: string; accountName: string; funding: string; description: string; pagu: number; realisasi: number; pending: number; available: number }
@@ -25,14 +26,17 @@ function Buttons({ blocked }: { blocked: boolean }) {
 }
 
 /** Form transaksi ringkas: cari butir, ringkasan sisa langsung, validasi langsung (server tetap memeriksa ulang). */
-export function TransactionForm({ versionId, year, items, recent, suppliers, methods, preselect }: {
-  versionId: string; year: number; items: TxItem[]; recent: Recent[]; suppliers: Opt[]; methods: Opt[]; preselect: string;
+export function TransactionForm({ versionId, year, items, recent, suppliers, methods, preselect, canManageMaster = false }: {
+  versionId: string; year: number; items: TxItem[]; recent: Recent[]; suppliers: Opt[]; methods: Opt[]; preselect: string; canManageMaster?: boolean;
 }) {
   const [itemId, setItemId] = useState(items.some((i) => i.id === preselect) ? preselect : "");
   const [find, setFind] = useState("");
   const [date, setDate] = useState(wibToday);
   const [amountRaw, setAmountRaw] = useState("");
   const [confirmDup, setConfirmDup] = useState(false);
+  const [supplierId, setSupplierId] = useState("");
+  const [newSup, setNewSup] = useState(false);
+  const [supName, setSupName] = useState("");
 
   const item = items.find((i) => i.id === itemId);
   const shown = useMemo(() => {
@@ -42,13 +46,16 @@ export function TransactionForm({ versionId, year, items, recent, suppliers, met
   const amount = amountRaw === "" ? NaN : Number(amountRaw.replace(",", "."));
   const duplicate = !!item && Number.isFinite(amount) && recent.some((r) => r.itemId === itemId && r.date === date && Math.round(r.amount * 100) === Math.round(amount * 100));
   const problem = item && amountRaw !== "" ? checkTransaction({ date, today: wibToday(), year, amount, available: item.available, duplicate, confirmDuplicate: confirmDup }) : null;
-  const ready = !!item && amountRaw !== "" && !problem;
+  const dupSup = newSup ? similarSuppliers(supName, suppliers) : { exact: null, similar: [] };
+  const supBlocked = newSup && supName.trim() === "";
+  const ready = !!item && amountRaw !== "" && !problem && !supBlocked;
 
   return (
     <form action={createTransactionAction} className="grid gap-4 border-t border-slate-100 p-5 sm:grid-cols-2">
       <input type="hidden" name="versionId" value={versionId} />
       <input type="hidden" name="itemId" value={itemId} />
       <input type="hidden" name="confirmDuplicate" value={confirmDup ? "true" : "false"} />
+      <input type="hidden" name="supplierNew" value={newSup ? "true" : "false"} />
 
       <div className="sm:col-span-2">
         <label htmlFor="tx-find" className="mb-1.5 block text-sm font-medium text-slate-800">1. Pilih butir anggaran <span className="font-normal text-slate-500">({shown.length} dari {items.length})</span></label>
@@ -86,11 +93,41 @@ export function TransactionForm({ versionId, year, items, recent, suppliers, met
       </div>
       <div>
         <label htmlFor="tx-sup" className="mb-1.5 block text-sm font-medium text-slate-800">Penyedia <span className="font-normal text-slate-500">(opsional)</span></label>
-        <select id="tx-sup" name="supplier" defaultValue="" className={cls}><option value="">— Tanpa penyedia —</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+        {!newSup ? (
+          <>
+            <select id="tx-sup" name="supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={cls}><option value="">— Tanpa penyedia —</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+            <button type="button" onClick={() => { setNewSup(true); setSupplierId(""); }} className="mt-1.5 text-xs font-medium text-navy-700 underline">Penyedia belum ada? Tambah manual</button>
+          </>
+        ) : (
+          <div className="space-y-2 rounded-lg border border-navy-100 bg-navy-50/40 p-3">
+            <input id="tx-sup" name="supplierName" required maxLength={200} value={supName} onChange={(e) => setSupName(e.target.value)} placeholder="Nama penyedia (mis. CV Maju Jaya)" aria-label="Nama penyedia baru" className={cls} />
+            {dupSup.exact && (
+              <p role="status" className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
+                Penyedia ini sudah ada di Data Master; akan dipakai ulang (tidak dibuat ganda).{" "}
+                <button type="button" className="font-semibold underline" onClick={() => { setSupplierId(dupSup.exact!.id); setNewSup(false); setSupName(""); }}>Pilih dari daftar</button>
+              </p>
+            )}
+            {!dupSup.exact && dupSup.similar.length > 0 && (
+              <p role="status" className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900">
+                Mirip dengan yang sudah ada:{" "}
+                {dupSup.similar.map((s) => <button key={s.id} type="button" className="mr-2 font-semibold underline" onClick={() => { setSupplierId(s.id); setNewSup(false); setSupName(""); }}>{s.label}</button>)}
+              </p>
+            )}
+            <input name="supplierNpwp" maxLength={40} inputMode="numeric" placeholder="NPWP (opsional, 15/16 digit)" aria-label="NPWP penyedia baru" className={cls} />
+            <input name="supplierAddress" maxLength={500} placeholder="Alamat (opsional)" aria-label="Alamat penyedia baru" className={cls} />
+            <p className="text-xs text-slate-600">Penyedia baru otomatis tersimpan di Data Master → Penyedia dan dapat dipilih pada transaksi berikutnya.</p>
+            <button type="button" onClick={() => { setNewSup(false); setSupName(""); }} className="text-xs font-medium text-navy-700 underline">Batal, pilih dari daftar</button>
+          </div>
+        )}
       </div>
       <div>
         <label htmlFor="tx-met" className="mb-1.5 block text-sm font-medium text-slate-800">Metode pengadaan <span className="font-normal text-slate-500">(opsional)</span></label>
         <select id="tx-met" name="method" defaultValue="" className={cls}><option value="">— Tidak ada —</option>{methods.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+        <p className="mt-1 text-xs text-slate-500">
+          Pilihan mengikuti Data Master → Metode Pengadaan (yang aktif).
+          {methods.length === 0 && " Belum ada metode pengadaan aktif."}
+          {canManageMaster && <> <a href="/master?tab=procurement_methods" className="font-medium text-navy-700 underline">Kelola metode</a></>}
+        </p>
       </div>
 
       {duplicate && (
@@ -100,6 +137,7 @@ export function TransactionForm({ versionId, year, items, recent, suppliers, met
         </label>
       )}
       {problem && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-800 sm:col-span-2">{problem}</p>}
+      {supBlocked && <p className="text-sm text-slate-600 sm:col-span-2">Isi nama penyedia baru, atau pilih dari daftar.</p>}
       {!item && <p className="text-sm text-slate-600 sm:col-span-2">Pilih satu butir anggaran pada daftar di atas untuk melanjutkan.</p>}
 
       <div className="sm:col-span-2">

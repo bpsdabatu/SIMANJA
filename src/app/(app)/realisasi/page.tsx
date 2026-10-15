@@ -88,7 +88,7 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
             {txItems.length === 0 ? (
               <p className="border-t border-slate-100 px-5 py-4 text-sm text-slate-600">Belum ada butir anggaran yang ditugaskan kepada Anda pada konteks ini.</p>
             ) : (
-              <TransactionForm versionId={context.versionId} year={context.year} items={txItems} recent={recent} suppliers={opts.suppliers} methods={opts.methods} preselect={sp.butir ?? ""} />
+              <TransactionForm versionId={context.versionId} year={context.year} items={txItems} recent={recent} suppliers={opts.suppliers} methods={opts.methods} preselect={sp.butir ?? ""} canManageMaster={user.permissions.has("master.manage")} />
             )}
           </details>
         </Card>

@@ -7,6 +7,7 @@ import { friendlyError, isUuid, num, optStr, runAction, str, uuidOrNull } from "
 import { parseCsv, parseMoney } from "@/lib/csv";
 import { readTable } from "@/lib/spreadsheet";
 import { STAGES } from "@/lib/auth/context";
+import { isIsoDate } from "@/lib/reports";
 
 const BACK = "/anggaran";
 
@@ -31,6 +32,18 @@ export async function setVersionStatusAction(fd: FormData): Promise<void> {
   const supabase = await userClient();
   return runAction(BACK, to === "final" ? "Versi anggaran difinalisasi dan tidak dapat diubah lagi." : "Versi anggaran diaktifkan.", async () =>
     supabase.rpc("set_budget_version_status", { p_version: id, p_to: to }),
+  );
+}
+
+/** Mengisi / mengoreksi tanggal penetapan DPA suatu versi (penentu tahapan berlaku pada LRA). Koreksi wajib beralasan (divalidasi database). */
+export async function setVersionDpaDateAction(fd: FormData): Promise<void> {
+  await requireModule("budget.edit");
+  const id = str(fd, "versionId", 40);
+  const date = str(fd, "dpaDate", 10);
+  if (!isUuid(id) || !isIsoDate(date)) flashRedirect(BACK, { err: "Versi atau tanggal DPA tidak valid." });
+  const supabase = await userClient();
+  return runAction(BACK, "Tanggal DPA disimpan.", async () =>
+    supabase.rpc("set_budget_version_dpa_date", { p_version: id, p_date: date, p_reason: optStr(fd, "reason", 300) }),
   );
 }
 

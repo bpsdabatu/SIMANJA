@@ -15,7 +15,7 @@ import { ConfirmSubmit, PrintButton, SubmitButton } from "@/components/ui/submit
 import { PrintFooter, PrintHeader, SignatureBlock } from "@/components/ui/report";
 import {
   addFiscalYearAction, addItemAction, assignPptkAction, createVersionAction, deleteItemAction, importCsvAction,
-  setVersionStatusAction, updateItemDetailAction, updatePaguAction,
+  setVersionDpaDateAction, setVersionStatusAction, updateItemDetailAction, updatePaguAction,
 } from "./actions";
 
 export const metadata: Metadata = { title: "Input Anggaran" };
@@ -50,7 +50,7 @@ export default async function AnggaranPage({ searchParams }: { searchParams: Pro
   const canImport = user.permissions.has("budget.import");
   const supabase = await userClient();
 
-  const [{ data: versionsRaw }, itemsRes, lookups, org] = await Promise.all([
+  const [{ data: versionsRaw }, itemsRes, lookups, org, dpaRes] = await Promise.all([
     supabase.from("budget_versions").select("id, stage_code, version_no, status, note, created_at, fiscal_years(year)")
       .order("created_at", { ascending: false }).limit(60),
     fetchAll<ItemRow>((from, to) => supabase.from("budget_item_versions")
@@ -58,7 +58,12 @@ export default async function AnggaranPage({ searchParams }: { searchParams: Pro
       .eq("budget_version_id", context.versionId).order("budget_item_id").range(from, to)),
     canEdit ? loadBudgetLookups(supabase) : Promise.resolve(null),
     getOrganizationName(supabase, user.organizationId),
+    // Terpisah agar halaman tetap berfungsi bila migrasi 0009 (kolom dpa_date) belum diterapkan.
+    supabase.from("budget_versions").select("id, dpa_date, dpa_note").limit(200),
   ]);
+  const dpaOf = new Map(((dpaRes.data ?? []) as Array<{ id: string; dpa_date: string | null; dpa_note: string | null }>).map((r) => [r.id, r]));
+  const canFinalize = user.permissions.has("budget.finalize");
+  const dmy = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
   const versions = (versionsRaw ?? []) as unknown as VersionRow[];
   const current = versions.find((v) => v.id === context.versionId);
@@ -131,15 +136,35 @@ export default async function AnggaranPage({ searchParams }: { searchParams: Pro
         />
         <TableWrap>
           <table className="table-base">
-            <thead><tr><th>Tahun</th><th>Tahapan</th><th>Versi</th><th>Status</th><th>Catatan</th>{canEdit && <th className="text-right">Aksi</th>}</tr></thead>
+            <thead><tr><th>Tahun</th><th>Tahapan</th><th>Versi</th><th>Status</th><th>Tanggal DPA</th><th>Catatan</th>{canEdit && <th className="text-right">Aksi</th>}</tr></thead>
             <tbody>
-              {versions.length === 0 && <tr><td colSpan={6}><EmptyState title="Belum ada versi anggaran">{canEdit ? "Buat versi pertama di bawah." : "Hubungi administrator."}</EmptyState></td></tr>}
+              {versions.length === 0 && <tr><td colSpan={7}><EmptyState title="Belum ada versi anggaran">{canEdit ? "Buat versi pertama di bawah." : "Hubungi administrator."}</EmptyState></td></tr>}
               {versions.map((v) => (
                 <tr key={v.id} className={v.id === context.versionId ? "bg-gold-50/50" : undefined}>
                   <td className="font-semibold">{v.fiscal_years?.year}</td>
                   <td>{STAGE_LABEL[v.stage_code]}</td>
                   <td>v{v.version_no}{v.id === context.versionId && <Badge tone="gold" className="ml-2">dibuka</Badge>}</td>
                   <td><Badge tone={STATUS_TONE[v.status]}>{STATUS_LABEL[v.status]}</Badge></td>
+                  <td className="min-w-44">
+                    {(() => {
+                      const d = dpaOf.get(v.id);
+                      const may = canEdit && (v.status === "draft" || v.status === "active" || canFinalize);
+                      return (<>
+                        {d?.dpa_date ? <span title={d.dpa_note ?? undefined}>{dmy(d.dpa_date)}</span> : <Badge tone="amber">belum diisi</Badge>}
+                        {may && (
+                          <details className="mt-1">
+                            <summary className="cursor-pointer text-xs text-navy-700 underline">{d?.dpa_date ? "Koreksi" : "Isi tanggal"}</summary>
+                            <form action={setVersionDpaDateAction} className="mt-2 grid w-64 gap-2">
+                              <input type="hidden" name="versionId" value={v.id} />
+                              <Input name="dpaDate" type="date" required defaultValue={d?.dpa_date ?? ""} aria-label="Tanggal penetapan DPA" />
+                              <Input name="reason" maxLength={300} required={!!d?.dpa_date} placeholder={d?.dpa_date ? "Alasan koreksi (wajib)" : "Keterangan (opsional)"} aria-label="Alasan" />
+                              <SubmitButton size="sm" variant="soft">Simpan tanggal DPA</SubmitButton>
+                            </form>
+                          </details>
+                        )}
+                      </>);
+                    })()}
+                  </td>
                   <td className="max-w-xs truncate text-slate-600">{v.note ?? "—"}</td>
                   {canEdit && (
                     <td className="text-right">

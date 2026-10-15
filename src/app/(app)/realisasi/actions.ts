@@ -6,6 +6,7 @@ import { flashRedirect } from "@/lib/flash";
 import { friendlyError, isUuid, num, optStr, runAction, str, uuidOrNull } from "@/lib/action-utils";
 import { availableOf, checkTransaction } from "@/lib/tx-rules";
 import { todayWIB } from "@/lib/quarterly-core";
+import { normalizeName, parseNpwp } from "@/lib/supplier-input";
 
 const LIST = "/realisasi";
 const detail = (id: string) => `/realisasi/${id}`;
@@ -42,12 +43,27 @@ export async function createTransactionAction(fd: FormData): Promise<void> {
   const problem = checkTransaction({ date, today: todayWIB(new Date()), year: context.year, amount, available: available!, duplicate, confirmDuplicate: str(fd, "confirmDuplicate", 5) === "true" });
   if (problem) flashRedirect(back, { err: problem });
 
+  // Penyedia: dipilih dari Data Master, atau diketik manual (ditambahkan ke Data Master / dipakai ulang bila namanya sudah ada).
+  let supplierId = uuidOrNull(fd, "supplier");
+  if (str(fd, "supplierNew", 5) === "true") {
+    const name = normalizeName(str(fd, "supplierName", 200));
+    const npwp = parseNpwp(str(fd, "supplierNpwp", 40));
+    if (!name) flashRedirect(back, { err: "Nama penyedia baru wajib diisi." });
+    if (npwp.error) flashRedirect(back, { err: npwp.error });
+    let supErr = "";
+    try {
+      const { data, error } = await supabase.rpc("create_supplier_for_realization", { p_name: name, p_npwp: npwp.value, p_address: optStr(fd, "supplierAddress", 500) });
+      if (error) supErr = friendlyError(error); else supplierId = String(data);
+    } catch { supErr = "Terjadi kesalahan pada sistem. Silakan coba lagi."; }
+    if (supErr) flashRedirect(back, { err: `Penyedia: ${supErr}` });
+  }
+
   let id = "";
   let message = "";
   try {
     const { data, error } = await supabase.rpc("create_transaction", {
       p_version: context.versionId, p_item: item, p_date: date, p_description: str(fd, "description", 500),
-      p_supplier: uuidOrNull(fd, "supplier"), p_method: uuidOrNull(fd, "method"), p_amount: amount,
+      p_supplier: supplierId, p_method: uuidOrNull(fd, "method"), p_amount: amount,
     });
     if (error) message = friendlyError(error); else id = String(data);
   } catch { message = "Terjadi kesalahan pada sistem. Silakan coba lagi."; }

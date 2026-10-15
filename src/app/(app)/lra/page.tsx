@@ -6,7 +6,6 @@ import { getOrganizationName } from "@/lib/lookups";
 import { isIsoDate } from "@/lib/reports";
 import { buildLraReport, periodBounds } from "@/lib/lra-core";
 import { loadKpa, loadLraData } from "@/lib/lra-data";
-import { STAGE_LABEL } from "@/lib/auth/context";
 import { formatAmount, formatPercent } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
@@ -33,13 +32,22 @@ export default async function LraPage({ searchParams }: { searchParams: Promise<
     getOrganizationName(supabase, user.organizationId),
     loadKpa(supabase, user.organizationId),
   ]);
-  const { lines, total, checks } = buildLraReport(data.items, context.stage);
+  const { lines, total, checks } = buildLraReport(data.items);
   const b = periodBounds(data.cutoff);
-  const stage = STAGE_LABEL[context.stage];
-  const sub = `Tahun Anggaran ${context.year} — Tahapan ${stage} — Sampai dengan ${dmy(data.cutoff)}`;
+  const { tahapan } = data;
+  const stage = tahapan.active?.label ?? "Belum ada DPA berlaku";
+  const sub = `Tahun Anggaran ${context.year} — Tahapan ${stage}${tahapan.active?.dpaDate ? ` (DPA ${dmy(tahapan.active.dpaDate)})` : ""} — Sampai dengan ${dmy(data.cutoff)}`;
+  const colLabel = (s: "murni" | "pergeseran" | "perubahan") => {
+    const c = tahapan.columns[s];
+    return { text: `${c?.label ?? { murni: "Murni", pergeseran: "Pergeseran", perubahan: "Perubahan" }[s]}${c && !c.effective ? " *" : ""}`, hint: c ? (c.dpaDate ? `DPA ${dmy(c.dpaDate)}${c.effective ? "" : " — belum berlaku pada tanggal batas"}` : "Tanggal DPA belum diisi") : "Belum ada versi pada tahapan ini" };
+  };
+  const planned = (["murni", "pergeseran", "perubahan"] as const).filter((s) => tahapan.columns[s] && !tahapan.columns[s]!.effective);
   const laluHint = b.laluTo ? `Realisasi sampai ${dmy(b.laluTo)}` : "Belum ada realisasi bulan lalu (awal tahun)";
   const iniHint = `Realisasi ${dmy(b.iniFrom)} s.d. ${dmy(b.iniTo)}`;
   const notices = [
+    tahapan.mode === "konteks" && "Tanggal DPA belum diisi pada versi anggaran mana pun, sehingga tahapan mengikuti konteks yang dipilih. Isi tanggal DPA di menu Input Anggaran → Versi anggaran.",
+    tahapan.mode === "tanggal" && tahapan.undated > 0 && `${tahapan.undated} versi anggaran belum memiliki tanggal DPA dan tidak dipertimbangkan dalam penentuan tahapan.`,
+    tahapan.mode === "tanggal" && !tahapan.active && `Belum ada DPA yang berlaku pada ${dmy(data.cutoff)}; pagu tahapan aktif dihitung 0.`,
     data.afterCutoff.count > 0 && `${data.afterCutoff.count} SP2D bertanggal setelah ${dmy(data.cutoff)} (Rp ${formatAmount(data.afterCutoff.amount)}) tidak dihitung pada laporan ini.`,
     data.unmapped.count > 0 && `${data.unmapped.count} realisasi sah (Rp ${formatAmount(data.unmapped.amount)}) tidak memiliki butir pada snapshot pagu mana pun dan tidak tampil — periksa Input Anggaran.`,
     checks.negativeSisa > 0 && `${checks.negativeSisa} butir realisasinya melebihi pagu (sisa negatif, ditandai merah).`,
@@ -95,12 +103,12 @@ export default async function LraPage({ searchParams }: { searchParams: Promise<
             <table className="table-base text-xs print:text-[9px]">
               <thead>
                 <tr>
-                  <th rowSpan={2}>Kode Rekening</th><th rowSpan={2}>Uraian Belanja</th><th rowSpan={2} className="text-right">Pagu ({stage})</th>
+                  <th rowSpan={2}>Kode Rekening</th><th rowSpan={2}>Uraian Belanja</th><th rowSpan={2} className="text-right">Pagu ({tahapan.active?.label ?? "-"})</th>
                   <th colSpan={3} className="text-center">Pagu Rincian</th><th colSpan={3} className="text-center">Realisasi</th>
                   <th rowSpan={2} className="text-right">Sisa</th><th rowSpan={2} className="text-right">%</th>
                 </tr>
                 <tr>
-                  <th className="text-right">Murni</th><th className="text-right">Pergeseran</th><th className="text-right">Perubahan</th>
+                  {(["murni", "pergeseran", "perubahan"] as const).map((k) => { const h = colLabel(k); return <th key={k} className="text-right" title={h.hint}>{h.text}</th>; })}
                   <th className="text-right" title={laluHint}>Bln Lalu</th><th className="text-right" title={iniHint}>Bln Ini</th><th className="text-right">Jumlah</th>
                 </tr>
               </thead>
@@ -129,6 +137,7 @@ export default async function LraPage({ searchParams }: { searchParams: Promise<
           </TableWrap>
         )}
       </Card>
+      {planned.length > 0 && <p className="text-xs text-slate-600">* DPA belum berlaku pada tanggal batas ({planned.map((k) => { const c = tahapan.columns[k]!; return `${c.label}${c.dpaDate ? `: ${dmy(c.dpaDate)}` : ": tanggal belum diisi"}`; }).join("; ")}); angka ditampilkan sebagai rencana.</p>}
       <SignatureBlock kpa={kpa} />
       <PrintFooter />
     </div>
