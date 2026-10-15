@@ -57,14 +57,17 @@ Jam digital WIB tampil di bar atas; salam tampil saat masuk dan saat kembali ke 
 4. **PPK/verifikator** mencatat nomor & tanggal **SP2D** per pembayaran → **Verifikasi**. Setelah itu nilainya dihitung sebagai realisasi (dasbor, LRA, laporan). Transaksi dapat dikembalikan atau dibatalkan dengan alasan.
 
 ### Pencarian realisasi & sisa anggaran
-Kartu *Pencarian Realisasi & Sisa Anggaran* di halaman Realisasi Belanja: filter kegiatan, sub kegiatan, belanja, sumber dana, PPTK, kata kunci; menampilkan pagu, realisasi, menunggu SP2D, sisa, % dan total; unduh Excel/CSV.
+Tabel *Realisasi & Sisa Anggaran* kini berada di menu **Rekapitulasi**: filter Program, Kegiatan, Sub Kegiatan, Belanja, PPTK, Sumber Dana, dan kata kunci; menampilkan pagu, realisasi, komitmen, sisa, % dan total; unduh Excel/CSV.
 
 ### Dasbor: peringkat capaian
 Kartu *Peringkat Capaian Realisasi Anggaran*: pilih peringkat menurut PPTK/Kegiatan/Sub Kegiatan dan periode (tahun, triwulan, atau bulan). Menampilkan 5 tertinggi dan 5 terendah menurut realisasi kumulatif s.d. akhir periode ÷ pagu.
 
 ### Realisasi Belanja: input transaksi yang disederhanakan
-Form *Buat transaksi baru* kini 4 langkah: cari & pilih butir (atau klik **Buat transaksi** pada baris hasil pencarian) → tanggal (bawaan hari ini WIB) → nilai → uraian. Ringkasan pagu/realisasi/menunggu SP2D/**sisa tersedia** tampil langsung beserta sisa setelah transaksi. Tombol **Simpan & ajukan verifikasi** menyimpan dan mengirim sekaligus; **Simpan sebagai draf** bila masih ada pembayaran lain.
-Pemeriksaan otomatis (juga di server): nilai ≤ sisa tersedia (pagu − realisasi − menunggu SP2D), tanggal pada tahun anggaran dan tidak melewati hari ini, maksimal 2 desimal, serta peringatan transaksi ganda (butir+tanggal+nilai sama) yang harus dikonfirmasi. Aturan nilai ≤ sisa juga berlaku saat menambah pembayaran.
+**Input Realisasi (PPTK).** Tabel *Transaksi realisasi* berada di atas, dilengkapi filter Program, Kegiatan, Sub Kegiatan, Belanja, PPTK, Sumber Dana, tanggal awal–akhir, dan kata kunci. Formulir *Input realisasi baru* di bawahnya: pilih butir → **tanggal SP2D** (bawaan hari ini WIB) → nilai → **Simpan realisasi**. Tidak ada nomor SP2D, tidak ada pengajuan, dan tidak ada verifikasi Admin: realisasi langsung tercatat dan langsung masuk Rekapitulasi, LRA, dan Dasbor. Uraian (otomatis dari nama rekening bila kosong), penyedia, dan metode pengadaan bersifat opsional. Setelah tersimpan, butir dan tanggal tetap terpilih untuk input berikutnya.
+
+Pemeriksaan otomatis (juga di server): nilai ≤ sisa anggaran (pagu − realisasi), tanggal SP2D pada tahun anggaran dan tidak melewati hari ini, maksimal 2 desimal, serta peringatan input ganda (butir+tanggal+nilai sama) yang harus dikonfirmasi.
+
+**Koreksi (Admin).** Pada detail transaksi, Admin dapat mengoreksi tanggal SP2D atau membatalkan realisasi; keduanya wajib beralasan dan tercatat.
 
 ### Navigasi
 - **Cari menu cepat**: tekan **Ctrl/⌘ + K** (atau tombol *Cari menu* di bar atas) lalu ketik; ↑ ↓ memilih, Enter membuka.

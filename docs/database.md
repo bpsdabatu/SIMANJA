@@ -5,7 +5,7 @@
 |---|---|---|
 | Pagu | `budget_item_versions.pagu` (snapshot per `budget_versions`) | Versi `final`/`superseded` tidak dapat diubah/dihapus (trigger). Penyesuaian = versi baru. |
 | Komitmen kontrak | `procurement_contracts.contract_value` | **Tidak pernah** dihitung sebagai realisasi. |
-| Pengeluaran diajukan | `payment_records.amount` | Tanpa SP2D bertanggal tampil sebagai "Menunggu SP2D". |
+| Pengeluaran diajukan | `payment_records.amount` | Sejak migrasi 0011 input baru langsung ber-SP2D bertanggal (nomor SP2D opsional); "Menunggu SP2D" hanya tersisa untuk data lama. |
 | SP2D | `sp2d_records` | Nomor unik per OPD+tahun (yang tidak di-void); void wajib alasan. |
 | Realisasi sah | view `v_eligible_realization` | status `realisasi` + SP2D bertanggal + tidak di-void. Dipakai semua KPI/laporan. |
 | Sisa anggaran | view `v_budget_balance` | pagu − realisasi sah; pagu 0 → persentase NULL; negatif ditampilkan. |

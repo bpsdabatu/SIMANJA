@@ -33,7 +33,7 @@ Semua penulisan data memakai fungsi database `SECURITY INVOKER` (migrasi 0006) s
 - Butir anggaran tidak dapat dihapus (hanya pagu diubah) pada versi yang belum final.
 - Lampiran berkas (Supabase Storage) belum diimplementasikan; menunggu berkas dari instansi.
 - Aturan "total anggaran kas harus sama dengan pagu" tidak dipaksakan (hanya tidak boleh melebihi pagu); sesuaikan bila diperlukan.
-- Realisasi diverifikasi oleh peran dengan izin `realization.verify` (bawaan: Admin); ubah di matriks izin bila perlu.
+- Realisasi tidak lagi diverifikasi (migrasi 0011): PPTK menyimpan dengan tanggal SP2D dan langsung tercatat. Izin `realization.verify` dipertahankan hanya sebagai hak tulis koreksi/pembatalan Admin.
 - Kode keamanan adalah penghalang otomatisasi sederhana; bukan pengganti kata sandi kuat dan throttling.
 
 ## Perubahan: impor/ekspor Excel, CRUD terkendali, laporan triwulanan

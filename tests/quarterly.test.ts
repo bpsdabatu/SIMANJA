@@ -81,13 +81,16 @@ describe("peringkat capaian", () => {
 });
 
 describe("pencarian realisasi & sisa", () => {
-  const row = (o: Partial<BalanceRow>): BalanceRow => ({ itemId: "i", activityCode: "K1", activityName: "Keg", subCode: "S1", subName: "Sub", accountCode: "R1", accountName: "Belanja ATK", fundingCode: "D1", funding: "PAD", pptkId: "p1", pptk: "Ani", description: "", pagu: 100, realisasi: 40, pending: 10, komitmen: 0, sisa: 60, pct: 40, ...o });
+  const row = (o: Partial<BalanceRow>): BalanceRow => ({ itemId: "i", programCode: "P1", programName: "Program Satu", activityCode: "K1", activityName: "Keg", subCode: "S1", subName: "Sub", accountCode: "R1", accountName: "Belanja ATK", fundingCode: "D1", funding: "PAD", pptkId: "p1", pptk: "Ani", description: "", pagu: 100, realisasi: 40, pending: 10, komitmen: 0, sisa: 60, pct: 40, ...o });
   const all = [row({}), row({ itemId: "j", subCode: "S2", accountCode: "R2", fundingCode: "D2", pptkId: null, pptk: "", pagu: 50, realisasi: 0, sisa: 50, pct: 0 })];
   it("filter berlapis", () => {
     expect(filterBalance(all, { sub: "S2" })).toHaveLength(1);
     expect(filterBalance(all, { pptk: "none" })[0]!.itemId).toBe("j");
     expect(filterBalance(all, { dana: "D1", bel: "R1", keg: "K1", pptk: "p1" })).toHaveLength(1);
     expect(filterBalance(all, { cari: "atk" })).toHaveLength(2);
+    expect(filterBalance(all, { prog: "P1" })).toHaveLength(2);
+    expect(filterBalance(all, { prog: "P9" })).toHaveLength(0);
+    expect(filterBalance(all, { cari: "program satu" })).toHaveLength(2);
   });
   it("total & opsi", () => {
     expect(totalsOf(all)).toMatchObject({ pagu: 150, realisasi: 40, sisa: 110, pct: 26.67 });
@@ -120,5 +123,17 @@ import { NAV_ITEMS } from "../src/lib/nav";
 describe("navigasi", () => {
   it("setiap menu punya keterangan untuk palet menu", () => {
     for (const i of NAV_ITEMS) expect(i.hint.length, i.label).toBeGreaterThan(5);
+  });
+});
+
+import { cascadeOptions } from "../src/lib/realization-search-core";
+describe("filter berjenjang (Program → Kegiatan → Sub → Belanja)", () => {
+  const r = (o: Partial<BalanceRow>): BalanceRow => ({ itemId: "i", programCode: "P1", programName: "Prog 1", activityCode: "K1", activityName: "Keg 1", subCode: "S1", subName: "Sub", accountCode: "R1", accountName: "ATK", fundingCode: "D1", funding: "PAD", pptkId: "p1", pptk: "Ani", description: "", pagu: 1, realisasi: 0, pending: 0, komitmen: 0, sisa: 1, pct: 0, ...o });
+  const rows = [r({}), r({ itemId: "b", programCode: "P2", activityCode: "K2", subCode: "S2", accountCode: "R2" })];
+  it("pilihan bawahan mengikuti pilihan atasnya", () => {
+    expect(cascadeOptions(rows, {}).keg.map((o) => o.value)).toEqual(["K1", "K2"]);
+    expect(cascadeOptions(rows, { prog: "P2" }).keg.map((o) => o.value)).toEqual(["K2"]);
+    expect(cascadeOptions(rows, { prog: "P1", keg: "K1" }).sub.map((o) => o.value)).toEqual(["S1"]);
+    expect(cascadeOptions(rows, { prog: "P2", keg: "K2", sub: "S2" }).bel.map((o) => o.value)).toEqual(["R2"]);
   });
 });
