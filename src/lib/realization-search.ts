@@ -17,7 +17,7 @@ export async function loadBalanceRows(sb: Sb, versionId: string): Promise<{ rows
   const rows: BalanceRow[] = items.map((i) => {
     const x = b.get(i.itemId);
     return {
-      itemId: i.itemId, activityCode: i.activityCode, activityName: i.activityName, subCode: i.subCode, subName: i.subName,
+      itemId: i.itemId, programCode: i.programCode, programName: i.programName, activityCode: i.activityCode, activityName: i.activityName, subCode: i.subCode, subName: i.subName,
       accountCode: i.accountCode, accountName: i.accountName, fundingCode: i.fundingCode, funding: i.funding,
       pptkId: i.pptkId, pptk: i.pptk, description: i.description, pagu: i.pagu,
       realisasi: Number(x?.eligible_realization ?? 0), pending: Number(x?.pending_sp2d ?? 0), komitmen: Number(x?.contract_commitment ?? 0),

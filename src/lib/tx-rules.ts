@@ -9,12 +9,12 @@ const rp = (n: number) => `Rp ${new Intl.NumberFormat("id-ID", { minimumFraction
 
 /** Mengembalikan pesan galat pertama, atau null bila lolos. */
 export function checkTransaction(i: TxCheckInput): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(i.date)) return "Tanggal transaksi tidak valid.";
-  if (Number(i.date.slice(0, 4)) !== i.year) return `Tanggal transaksi harus berada pada tahun anggaran ${i.year}.`;
-  if (i.date > i.today) return "Tanggal transaksi tidak boleh melebihi tanggal hari ini.";
-  if (!Number.isFinite(i.amount) || i.amount <= 0) return "Nilai pembayaran harus lebih dari nol.";
-  if (Math.round(i.amount * 100) / 100 !== i.amount) return "Nilai pembayaran maksimal dua angka desimal.";
-  if (i.amount > i.available) return `Nilai (${rp(i.amount)}) melebihi sisa anggaran tersedia (${rp(Math.max(0, i.available))}). Sisa tersedia = pagu − realisasi − pembayaran yang masih menunggu SP2D.`;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(i.date)) return "Tanggal SP2D tidak valid.";
+  if (Number(i.date.slice(0, 4)) !== i.year) return `Tanggal SP2D harus berada pada tahun anggaran ${i.year}.`;
+  if (i.date > i.today) return "Tanggal SP2D tidak boleh melebihi tanggal hari ini.";
+  if (!Number.isFinite(i.amount) || i.amount <= 0) return "Nilai realisasi harus lebih dari nol.";
+  if (Math.round(i.amount * 100) / 100 !== i.amount) return "Nilai realisasi maksimal dua angka desimal.";
+  if (i.amount > i.available) return `Nilai (${rp(i.amount)}) melebihi sisa anggaran tersedia (${rp(Math.max(0, i.available))}). Sisa tersedia = pagu − realisasi.`;
   if (i.duplicate && !i.confirmDuplicate) return "Sudah ada transaksi dengan butir, tanggal, dan nilai yang sama. Centang konfirmasi bila ini memang transaksi terpisah.";
   return null;
 }

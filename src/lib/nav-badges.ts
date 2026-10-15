@@ -13,8 +13,7 @@ export async function loadNavBadges(sb: Sb, versionId: string, perms: Set<string
     } catch { return 0; }
   };
   const [tx, kas] = await Promise.all([
-    perms.has("realization.verify") ? count("realization_transactions", ["submitted", "payment_processing"])
-      : perms.has("realization.edit") ? count("realization_transactions", ["returned"]) : Promise.resolve(0),
+    Promise.resolve(0), // realisasi tidak lagi menunggu verifikasi/pengembalian
     perms.has("cashplan.finalize") ? count("cash_budget_plans", ["submitted"])
       : perms.has("cashplan.edit") ? count("cash_budget_plans", ["returned"]) : Promise.resolve(0),
   ]);
