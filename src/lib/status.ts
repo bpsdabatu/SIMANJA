@@ -4,7 +4,7 @@ export const TX_STATUS: Record<string, { label: string; tone: Tone }> = {
   draft: { label: "Draf", tone: "amber" },
   submitted: { label: "Diajukan", tone: "navy" },
   contracted: { label: "Berkontrak", tone: "navy" },
-  payment_processing: { label: "Proses SP2D", tone: "gold" },
+  payment_processing: { label: "Belum SP2D", tone: "red" },
   realisasi: { label: "Realisasi", tone: "green" },
   returned: { label: "Dikembalikan", tone: "red" },
   cancelled: { label: "Dibatalkan", tone: "slate" },

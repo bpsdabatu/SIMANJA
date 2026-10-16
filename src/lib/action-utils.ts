@@ -17,6 +17,13 @@ export function friendlyError(error: PgError | null | undefined): string {
   }
   if (error.code === "23505") return "Data yang sama sudah ada.";
   if (error.code === "23503") return "Data rujukan tidak ditemukan.";
+  // Fungsi/tabel/kolom basis data tidak ditemukan = migrasi SQL belum dijalankan (penyebab paling umum "Tindakan gagal diproses").
+  if ((error.code && /^(PGRST|42883|42P01|42703)/.test(error.code)) || /could not find the function|schema cache/i.test(m)) {
+    console.error("[db-schema]", error.code ?? "-", m);
+    return "Basis data belum diperbarui. Jalankan migrasi SQL terbaru (0013) di Supabase, lalu coba lagi.";
+  }
+  // Rincian hanya ke log server (Vercel → Logs), tidak ditampilkan ke pengguna.
+  console.error("[db-error]", error.code ?? "-", m);
   return "Tindakan gagal diproses. Periksa isian Anda atau hubungi administrator.";
 }
 
