@@ -8,3 +8,10 @@ export async function requireModule(permission: string) {
   if (!ctx.user.permissions.has(permission)) redirect("/dashboard?akses=ditolak");
   return ctx;
 }
+
+/** Seperti requireModule, tetapi hanya untuk akun berperan admin (mis. Laporan Realisasi Anggaran). Selain admin dialihkan ke dasbor. */
+export async function requireAdminModule(permission: string) {
+  const ctx = await requireModule(permission);
+  if (!ctx.user.roles.includes("admin")) redirect("/dashboard?akses=ditolak");
+  return ctx;
+}

@@ -42,7 +42,6 @@ export const MASTER: Record<string, MasterEntity> = {
     label: "Penyedia", table: "suppliers", orderBy: "name",
     fields: [
       { key: "name", label: "Nama Penyedia", required: true, max: 200 },
-      { key: "npwp", label: "NPWP", max: 40, mono: true },
       { key: "address", label: "Alamat", kind: "textarea", max: 500 },
     ],
   },

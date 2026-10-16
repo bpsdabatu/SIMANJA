@@ -26,10 +26,9 @@ export const IMPORT_SPECS: Record<string, ImportSpec> = {
   suppliers: {
     columns: [
       { key: "name", label: "nama", aliases: ["nama", "name", "nama_penyedia"], required: true, max: 200 },
-      { key: "npwp", label: "npwp", aliases: ["npwp"], max: 40 },
       { key: "address", label: "alamat", aliases: ["alamat", "address"], max: 500 },
     ],
-    sample: ["CV Contoh Mandiri", "00.000.000.0-000.000", "Jl. Contoh No. 1"],
+    sample: ["CV Contoh Mandiri", "Jl. Contoh No. 1"],
   },
   rup_references: {
     columns: [

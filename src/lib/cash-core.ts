@@ -77,3 +77,18 @@ export function recapTotals(items: RecapItem[]): RecapTotals {
   const total = tw.reduce((a, b) => a + b, 0);
   return { pagu: fromCents(pagu), tw: tw.map(fromCents) as RecapTotals["tw"], total: fromCents(total), sisa: fromCents(pagu - total), count, filled };
 }
+
+/**
+ * Mengurai angka tempelan dari Excel/CSV (lebih longgar daripada parseAmount):
+ * menerima "Rp", spasi, format Indonesia (1.234.567,89) maupun Inggris (1,234,567.89). NaN bila tidak valid. Kosong = 0.
+ */
+export function parseLoose(raw: string): number {
+  let t = raw.trim().replace(/^rp\.?\s*/i, "").replace(/\s/g, "");
+  if (t === "" || t === "-") return 0;
+  if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(t)) t = t.replace(/\./g, "").replace(",", ".");
+  else if (/^\d{1,3}(,\d{3})+(\.\d{1,2})?$/.test(t)) t = t.replace(/,/g, "");
+  return parseAmount(t);
+}
+
+/** Status baris anggaran kas pada tabel ringkas: kosong/sebagian/penuh/lebih terhadap pagu. */
+export const rowAllocation = (pagu: number, months: number[]) => allocation(pagu, months);

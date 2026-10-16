@@ -25,8 +25,8 @@ export async function loadQItems(
     loadBudgetItems(sb, ctx.versionId),
     fetchAll<{ budget_item_id: string; status: string; cash_budget_periods: { period_no: number; period_type: string; amount: string | number }[] }>((from, to) =>
       sb.from("cash_budget_plans").select("budget_item_id, status, cash_budget_periods(period_no, period_type, amount)").eq("budget_version_id", ctx.versionId).order("id").range(from, to)),
-    fetchAll<{ budget_item_id: string; amount: string | number; sp2d_date: string }>((from, to) =>
-      sb.from("v_eligible_realization").select("budget_item_id, amount, sp2d_date").eq("budget_version_id", ctx.versionId).lte("sp2d_date", endDate).order("payment_id").range(from, to)),
+    fetchAll<{ budget_item_id: string; amount: string | number; sp2d_date: string; transaction_date: string | null }>((from, to) =>
+      sb.from("v_eligible_realization").select("budget_item_id, amount, sp2d_date, transaction_date").eq("budget_version_id", ctx.versionId).lte("sp2d_date", endDate).order("payment_id").range(from, to)),
     fetchAll<{ budget_item_id: string; pending_sp2d: string | number; contract_commitment: string | number }>((from, to) =>
       sb.from("v_budget_balance").select("budget_item_id, pending_sp2d, contract_commitment").eq("budget_version_id", ctx.versionId).order("budget_item_id").range(from, to)),
     fetchAll<{ id: string; budget_item_id: string }>((from, to) =>
@@ -36,8 +36,8 @@ export async function loadQItems(
   const error = e1 ?? plans.error ?? real.error ?? bal.error ?? tx.error;
   const planOf = new Map(plans.rows.map((p) => [p.budget_item_id, p]));
   const balOf = new Map(bal.rows.map((b) => [b.budget_item_id, b]));
-  const realOf = new Map<string, { date: string; amount: number }[]>();
-  for (const r of real.rows) (realOf.get(r.budget_item_id) ?? realOf.set(r.budget_item_id, []).get(r.budget_item_id)!).push({ date: r.sp2d_date, amount: Number(r.amount) });
+  const realOf = new Map<string, { date: string; amount: number; txDate?: string }[]>();
+  for (const r of real.rows) (realOf.get(r.budget_item_id) ?? realOf.set(r.budget_item_id, []).get(r.budget_item_id)!).push({ date: r.sp2d_date, amount: Number(r.amount), txDate: r.transaction_date ?? r.sp2d_date });
   const txItems = new Set(tx.rows.map((t) => t.budget_item_id));
 
   const items: QItem[] = all.map((i) => {

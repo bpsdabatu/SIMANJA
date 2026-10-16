@@ -20,7 +20,8 @@ export interface QItem {
   /** 12 nilai bulanan, atau null bila belum ada rencana kas. */
   kasMonths: number[] | null;
   kasStatus: string | null;
-  real: { date: string; amount: number }[];
+  /** date = tanggal SP2D (dasar realisasi sah); txDate = tanggal transaksi (opsional; bila kosong dianggap sama dengan date). */
+  real: { date: string; amount: number; txDate?: string }[];
   pending: number; komitmen: number;
   /** Ada transaksi aktif (bukan dibatalkan). */
   hasTransaction: boolean;
