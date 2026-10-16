@@ -116,6 +116,24 @@ describe("tanggal transaksi terpisah dari tanggal SP2D", () => {
   });
 });
 
+describe("status SP2D: sudah / belum", () => {
+  const base = { date: "", today: "2026-06-01", year: 2026, amount: 100, available: 1000, duplicate: false, confirmDuplicate: false };
+  it("belum SP2D: tanggal SP2D tidak diperiksa, tanggal transaksi wajib", () => {
+    expect(checkTransaction({ ...base, sp2dDone: false, txDate: "2026-05-10" })).toBeNull();
+    expect(checkTransaction({ ...base, sp2dDone: false })).toMatch(/Tanggal transaksi tidak valid/);
+    expect(checkTransaction({ ...base, sp2dDone: false, txDate: "2026-06-02" })).toMatch(/hari ini/);
+    expect(checkTransaction({ ...base, sp2dDone: false, txDate: "2025-12-31" })).toMatch(/tahun anggaran/);
+  });
+  it("belum SP2D tetap tunduk pada sisa anggaran dan nilai", () => {
+    expect(checkTransaction({ ...base, sp2dDone: false, txDate: "2026-05-10", amount: 1000.01 })).toMatch(/melebihi sisa/);
+    expect(checkTransaction({ ...base, sp2dDone: false, txDate: "2026-05-10", amount: 0 })).toMatch(/lebih dari nol/);
+  });
+  it("sudah SP2D (bawaan): tanggal SP2D wajib valid", () => {
+    expect(checkTransaction({ ...base, txDate: "2026-05-10" })).toMatch(/Tanggal SP2D tidak valid/);
+    expect(checkTransaction({ ...base, date: "2026-05-10", txDate: "2026-05-10" })).toBeNull();
+  });
+});
+
 describe("menu LRA hanya admin", () => {
   const lra = NAV_ITEMS.find((i) => i.href === "/lra")!;
   const perms = new Set(["lra.view", "lra.export"]);
