@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Download, TriangleAlert } from "lucide-react";
-import { requireModule } from "@/lib/auth/guard";
+import { requireAdminModule } from "@/lib/auth/guard";
 import { userClient } from "@/lib/supabase/server";
 import { getOrganizationName } from "@/lib/lookups";
 import { isIsoDate } from "@/lib/reports";
@@ -23,7 +23,7 @@ const WEIGHT = ["font-bold bg-navy-100/60", "font-semibold bg-navy-50/80", "font
 const dmy = (iso: string) => new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
 export default async function LraPage({ searchParams }: { searchParams: Promise<{ sampai?: string }> }) {
-  const { user, context } = await requireModule("lra.view");
+  const { user, context } = await requireAdminModule("lra.view");
   const sp = await searchParams;
   const until = isIsoDate(sp.sampai) ? sp.sampai : null;
   const supabase = await userClient();

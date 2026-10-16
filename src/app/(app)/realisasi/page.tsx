@@ -21,10 +21,19 @@ export const dynamic = "force-dynamic";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+interface Sp2dRef { sp2d_date: string | null; voided_at: string | null }
 interface Tx {
   id: string; transaction_date: string; description: string; status: string; budget_item_id: string;
-  suppliers: { name: string } | null; payment_records: { amount: string | number }[];
+  suppliers: { name: string } | null; payment_records: { amount: string | number; sp2d_records: Sp2dRef | Sp2dRef[] | null }[];
 }
+const sp2dDateOf = (t: Tx): string | null => {
+  for (const p of t.payment_records) {
+    const s = Array.isArray(p.sp2d_records) ? p.sp2d_records.find((x) => !x.voided_at) : p.sp2d_records && !p.sp2d_records.voided_at ? p.sp2d_records : null;
+    if (s?.sp2d_date) return s.sp2d_date;
+  }
+  return null;
+};
+const fmtD = (d: string) => new Date(d).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 interface RecentRaw { budget_item_id: string; transaction_date: string; payment_records: { amount: string | number }[] }
 
 type SP = { ok?: string; err?: string; butir?: string; tgl?: string; prog?: string; keg?: string; sub?: string; bel?: string; dana?: string; pptk?: string; cari?: string; dari?: string; sampai?: string };
@@ -39,7 +48,7 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
   const sampai = DATE_RE.test(sp.sampai ?? "") ? sp.sampai! : "";
 
   let txQuery = supabase.from("realization_transactions")
-    .select("id, transaction_date, description, status, budget_item_id, suppliers(name), payment_records(amount)")
+    .select("id, transaction_date, description, status, budget_item_id, suppliers(name), payment_records(amount, sp2d_records(sp2d_date, voided_at))")
     .eq("budget_version_id", context.versionId).order("transaction_date", { ascending: false }).order("created_at", { ascending: false }).limit(1000);
   if (dari) txQuery = txQuery.gte("transaction_date", dari);
   if (sampai) txQuery = txQuery.lte("transaction_date", sampai);
@@ -85,7 +94,8 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
       <PageHeader
         eyebrow={`TA ${context.year} · ${STAGE_LABEL[context.stage]}`}
         title="Input Realisasi"
-        description="Realisasi langsung tercatat saat disimpan (cukup tanggal SP2D, tanpa verifikasi). Pencarian pagu, realisasi, dan sisa anggaran per butir ada di menu Rekapitulasi."
+        actions={user.permissions.has("realization.edit") ? <Link href="/realisasi/penyedia" className={buttonVariants({ variant: "outline" })}>Kelola penyedia</Link> : undefined}
+        description="Realisasi langsung tercatat saat disimpan (isi tanggal transaksi dan tanggal SP2D, tanpa verifikasi). Pencarian pagu, realisasi, dan sisa anggaran per butir ada di menu Rekapitulasi."
       />
       <Flash ok={sp.ok} err={sp.err} />
 
@@ -101,8 +111,8 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
           <Field label="Belanja (rekening)" htmlFor="f-bel"><Select id="f-bel" name="bel" defaultValue={f.bel}><option value="">Semua rekening belanja</option>{opt.bel.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select></Field>
           <Field label="PPTK" htmlFor="f-pptk"><Select id="f-pptk" name="pptk" defaultValue={f.pptk}><option value="">Semua PPTK</option>{opt.pptk.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}<option value="none">Belum ditugaskan</option></Select></Field>
           <Field label="Sumber dana" htmlFor="f-dana"><Select id="f-dana" name="dana" defaultValue={f.dana}><option value="">Semua sumber dana</option>{opt.dana.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</Select></Field>
-          <Field label="Tanggal awal" htmlFor="f-dari"><Input id="f-dari" name="dari" type="date" defaultValue={dari} /></Field>
-          <Field label="Tanggal akhir" htmlFor="f-sampai"><Input id="f-sampai" name="sampai" type="date" defaultValue={sampai} /></Field>
+          <Field label="Tgl transaksi dari" htmlFor="f-dari"><Input id="f-dari" name="dari" type="date" defaultValue={dari} /></Field>
+          <Field label="Tgl transaksi s.d." htmlFor="f-sampai"><Input id="f-sampai" name="sampai" type="date" defaultValue={sampai} /></Field>
           <Field label="Kata kunci" htmlFor="f-cari" className="sm:col-span-2 lg:col-span-2"><Input id="f-cari" name="cari" defaultValue={sp.cari ?? ""} placeholder="uraian, penyedia, kode / nama sub kegiatan atau rekening" maxLength={60} /></Field>
           <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-2">
             <button className={buttonVariants({ variant: "primary" })}><Search size={16} aria-hidden /> Terapkan</button>
@@ -115,14 +125,15 @@ export default async function RealisasiPage({ searchParams }: { searchParams: Pr
           <TableWrap>
             <div className="max-h-[26rem] overflow-y-auto">
               <table className="table-base">
-                <thead className="sticky top-0 z-10 bg-slate-50"><tr><th>Tgl SP2D</th><th>Sub kegiatan · Rekening</th><th>Uraian</th><th>Penyedia</th><th className="text-right">Nilai</th><th>Status</th></tr></thead>
+                <thead className="sticky top-0 z-10 bg-slate-50"><tr><th>Tgl transaksi</th><th>Tgl SP2D</th><th>Sub kegiatan · Rekening</th><th>Uraian</th><th>Penyedia</th><th className="text-right">Nilai</th><th>Status</th></tr></thead>
                 <tbody>
                   {txs.map((t) => {
                     const r = rowOf.get(t.budget_item_id);
                     const st = TX_STATUS[t.status] ?? { label: t.status, tone: "slate" as const };
                     return (
                       <tr key={t.id}>
-                        <td className="whitespace-nowrap">{new Date(t.transaction_date).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</td>
+                        <td className="whitespace-nowrap">{fmtD(t.transaction_date)}</td>
+                        <td className="whitespace-nowrap">{sp2dDateOf(t) ? fmtD(sp2dDateOf(t)!) : "—"}</td>
                         <td className="text-xs text-slate-600"><span className="font-mono">{r?.subCode}</span> · {r?.accountCode}<span className="block text-slate-500">{r?.accountName}</span></td>
                         <td><Link href={`/realisasi/${t.id}`} className="font-medium text-navy-700 hover:underline">{t.description}</Link></td>
                         <td>{t.suppliers?.name ?? "—"}</td>

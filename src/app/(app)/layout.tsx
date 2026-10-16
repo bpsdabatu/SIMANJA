@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireContext } from "@/lib/auth/session";
-import { NAV_ITEMS, ROLE_LABEL } from "@/lib/nav";
+import { NAV_ITEMS, ROLE_LABEL, canSeeNav } from "@/lib/nav";
 import { STAGE_LABEL } from "@/lib/auth/context";
 import { AppShell } from "@/components/app-shell";
 import { userClient } from "@/lib/supabase/server";
@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (user.mustChangePassword) redirect("/ganti-password");
 
   // Menu ditampilkan hanya bila pengguna memiliki izin (kenyamanan UI; RLS tetap penentu akses).
-  const items = NAV_ITEMS.filter((i) => user.permissions.has(i.permission));
+  const items = NAV_ITEMS.filter((i) => canSeeNav(i, user));
 
   const badges = await loadNavBadges(await userClient(), context.versionId, user.permissions);
 

@@ -6,6 +6,8 @@ import { flashRedirect } from "@/lib/flash";
 import { friendlyError, isUuid, num, optStr, runAction, str } from "@/lib/action-utils";
 import { parseMoney } from "@/lib/csv";
 import { normHeader, readTable } from "@/lib/spreadsheet";
+import { parseBulkPayload } from "@/lib/cash-bulk";
+import { requireModule as requirePerm } from "@/lib/auth/guard";
 
 const BACK = "/anggaran-kas";
 
@@ -106,4 +108,45 @@ export async function importCashPlansAction(fd: FormData): Promise<void> {
   }
   if (failed.length) flashRedirect(BACK, { err: `${ok} butir tersimpan sebagai draf, ${failed.length} gagal. ${failed.slice(0, 4).join("; ")}${failed.length > 4 ? " ..." : ""}` });
   flashRedirect(BACK, { ok: `${ok} anggaran kas tersimpan sebagai draf${skipped ? `; ${skipped} baris kosong dilewati` : ""}. Periksa lalu ajukan.` });
+}
+
+/* ======================= Tambahan: simpan massal (tabel ringkas) ======================= */
+
+/**
+ * Simpan beberapa butir sekaligus dari tabel ringkas. intent=draft: simpan sebagai draf; intent=submit: simpan lalu ajukan.
+ * Setiap butir tetap melewati RPC save_cash_plan / set_cash_plan_status (RLS PPTK penugasan, total kas <= pagu diperiksa di database).
+ * Tidak atomik antarbutir: butir yang berhasil tetap tersimpan, yang gagal dilaporkan dengan alasannya.
+ */
+export async function saveCashPlansBulkAction(fd: FormData): Promise<void> {
+  const submit = str(fd, "intent", 10) === "submit";
+  const versionId = await ctxVersion(fd, "cashplan.edit");
+  if (submit) await requirePerm("cashplan.submit");
+  const parsed = parseBulkPayload(String(fd.get(submit ? "payload_submit" : "payload_draft") ?? ""));
+  if (!parsed.ok) flashRedirect(BACK, { err: parsed.error });
+  const rows = (parsed as { ok: true; rows: ReturnType<typeof parseBulkPayload> extends infer R ? R extends { ok: true; rows: infer T } ? T : never : never }).rows;
+
+  const supabase = await userClient();
+  let saved = 0, submitted = 0;
+  const failed: string[] = [];
+  const CHUNK = 6;
+  for (let k = 0; k < rows.length; k += CHUNK) {
+    await Promise.all(rows.slice(k, k + CHUNK).map(async (r) => {
+      try {
+        const { data, error } = await supabase.rpc("save_cash_plan", { p_version: versionId, p_item: r.id, p_months: r.months });
+        if (error) { failed.push(`${r.label}: ${friendlyError(error)}`); return; }
+        saved++;
+        if (!submit) return;
+        const planId = typeof data === "string" ? data : "";
+        if (!isUuid(planId)) { failed.push(`${r.label}: tersimpan sebagai draf, belum diajukan`); return; }
+        const res = await supabase.rpc("set_cash_plan_status", { p_plan: planId, p_to: "submitted", p_reason: null });
+        if (res.error) failed.push(`${r.label}: tersimpan sebagai draf, belum diajukan (${friendlyError(res.error)})`); else submitted++;
+      } catch (e) {
+        console.error("[kas-massal]", e instanceof Error ? e.message : "unknown");
+        failed.push(`${r.label}: terjadi kesalahan sistem`);
+      }
+    }));
+  }
+  const okMsg = submit ? `${submitted} butir disimpan dan diajukan.` : `${saved} butir disimpan sebagai draf.`;
+  if (failed.length) flashRedirect(BACK, { err: `${okMsg} ${failed.length} butir gagal: ${failed.slice(0, 4).join("; ")}${failed.length > 4 ? " ..." : ""}` });
+  flashRedirect(BACK, { ok: okMsg });
 }

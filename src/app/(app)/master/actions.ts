@@ -117,7 +117,7 @@ async function runMasterImport(organizationId: string, entityKey: string, table:
   let skipped = 0;
   const build = (r: ParsedRow): Record<string, unknown> | null => {
     const base: Record<string, unknown> = { organization_id: user.organizationId };
-    if (entityKey === "suppliers") return { ...base, name: r.name, npwp: r.npwp ?? null, address: r.address ?? null };
+    if (entityKey === "suppliers") return { ...base, name: r.name, address: r.address ?? null };
     if (entityKey === "rup_references") {
       const fy = yearId.get(r.year!);
       if (!fy) { problems.push(`Baris ${r.line}: tahun anggaran ${r.year} belum ada (buat melalui Input Anggaran > Tahun anggaran)`); return null; }

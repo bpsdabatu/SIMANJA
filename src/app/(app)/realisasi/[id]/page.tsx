@@ -11,7 +11,7 @@ import { Badge, Card, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Flash, PageHeader } from "@/components/ui/page";
 import { ConfirmSubmit, SubmitButton } from "@/components/ui/submit-button";
-import { cancelTransactionAction, correctDateAction } from "../actions";
+import { cancelTransactionAction, correctDatesAction } from "../actions";
 
 export const metadata: Metadata = { title: "Detail Realisasi" };
 export const dynamic = "force-dynamic";
@@ -54,6 +54,7 @@ export default async function TransactionDetail({ params, searchParams }: { para
 
       <Card className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-3">
         {[
+          ["Tanggal transaksi", fmtDate(tx.transaction_date, true)],
           ["Tanggal SP2D", fmtDate(sp2dDate, true)],
           ["Nilai realisasi", formatRupiah(total)],
           ["Butir anggaran", `${it?.sub_activities?.code ?? ""} · ${it?.expenditure_accounts?.code ?? ""} ${it?.expenditure_accounts?.name ?? ""}`],
@@ -71,8 +72,11 @@ export default async function TransactionDetail({ params, searchParams }: { para
         <Card>
           <CardHeader title="Koreksi" description="Hanya Admin. Koreksi mewajibkan alasan; perubahan data tercatat di Log Audit." />
           {canCorrect && (
-            <form action={correctDateAction} className="flex flex-wrap items-end gap-2 border-b border-slate-100 p-5">
+            <form action={correctDatesAction} className="flex flex-wrap items-end gap-2 border-b border-slate-100 p-5">
               <input type="hidden" name="txId" value={id} />
+              <label className="text-sm font-medium text-slate-700">Tanggal transaksi
+                <Input name="txDate" type="date" required defaultValue={tx.transaction_date} className="mt-1 h-10 w-44" />
+              </label>
               <label className="text-sm font-medium text-slate-700">Tanggal SP2D
                 <Input name="date" type="date" required defaultValue={sp2dDate} className="mt-1 h-10 w-44" />
               </label>

@@ -25,7 +25,7 @@ function SaveButton({ blocked }: { blocked: boolean }) {
 }
 
 /**
- * Form realisasi ringkas: pilih butir → tanggal SP2D → nilai → Simpan. Tanpa nomor SP2D, tanpa verifikasi:
+ * Form realisasi ringkas: pilih butir → tanggal transaksi & tanggal SP2D → nilai → Simpan. Tanpa nomor SP2D, tanpa verifikasi:
  * tersimpan langsung sebagai realisasi. Uraian, penyedia, dan metode bersifat opsional. Server memeriksa ulang semua aturan.
  */
 export function TransactionForm({ versionId, year, items, recent, suppliers, methods, preselect, defaultDate, canManageMaster = false }: {
@@ -35,6 +35,9 @@ export function TransactionForm({ versionId, year, items, recent, suppliers, met
   const [itemId, setItemId] = useState(items.some((i) => i.id === preselect) ? preselect : "");
   const [find, setFind] = useState("");
   const [date, setDate] = useState(/^\d{4}-\d{2}-\d{2}$/.test(defaultDate) && defaultDate <= today ? defaultDate : today);
+  // Tanggal transaksi mengikuti tanggal SP2D sampai pengguna mengubahnya sendiri.
+  const [txDate, setTxDate] = useState(date);
+  const [txTouched, setTxTouched] = useState(false);
   const [amountRaw, setAmountRaw] = useState("");
   const [confirmDup, setConfirmDup] = useState(false);
   const [supplierId, setSupplierId] = useState("");
@@ -50,8 +53,8 @@ export function TransactionForm({ versionId, year, items, recent, suppliers, met
     return q ? items.filter((i) => [i.subCode, i.subName, i.accountCode, i.accountName, i.funding, i.description].some((x) => x.toLowerCase().includes(q))) : items;
   }, [find, items]);
   const amount = amountRaw === "" ? NaN : Number(amountRaw.replace(",", "."));
-  const duplicate = !!item && Number.isFinite(amount) && recent.some((r) => r.itemId === itemId && r.date === date && Math.round(r.amount * 100) === Math.round(amount * 100));
-  const problem = item && amountRaw !== "" ? checkTransaction({ date, today, year, amount, available: item.available, duplicate, confirmDuplicate: confirmDup }) : null;
+  const duplicate = !!item && Number.isFinite(amount) && recent.some((r) => r.itemId === itemId && r.date === txDate && Math.round(r.amount * 100) === Math.round(amount * 100));
+  const problem = item && amountRaw !== "" ? checkTransaction({ date, txDate, today, year, amount, available: item.available, duplicate, confirmDuplicate: confirmDup }) : null;
   const dupSup = newSup ? similarSuppliers(supName, suppliers) : { exact: null, similar: [] };
   const supBlocked = newSup && supName.trim() === "";
   const ready = !!item && amountRaw !== "" && !problem && !supBlocked;
@@ -82,15 +85,19 @@ export function TransactionForm({ versionId, year, items, recent, suppliers, met
       )}
 
       <div>
-        <label htmlFor="tx-date" className={lbl}>Tanggal SP2D</label>
-        <input id="tx-date" name="date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} min={`${year}-01-01`} max={today} className={cls} />
+        <label htmlFor="tx-txdate" className={lbl}>Tanggal transaksi</label>
+        <input id="tx-txdate" name="txDate" type="date" required value={txDate} onChange={(e) => { setTxDate(e.target.value); setTxTouched(true); }} min={`${year}-01-01`} max={date || today} className={cls} />
       </div>
       <div>
+        <label htmlFor="tx-date" className={lbl}>Tanggal SP2D</label>
+        <input id="tx-date" name="date" type="date" required value={date} onChange={(e) => { setDate(e.target.value); if (!txTouched) setTxDate(e.target.value); }} min={`${year}-01-01`} max={today} className={cls} />
+      </div>
+      <div className="sm:col-span-2">
         <label htmlFor="tx-amount" className={lbl}>Nilai realisasi (Rp)</label>
         <input ref={amountRef} id="tx-amount" name="amount" type="number" min={0.01} step="0.01" required inputMode="decimal" value={amountRaw} onChange={(e) => setAmountRaw(e.target.value)} className={cls} />
         {Number.isFinite(amount) && amount > 0 && <p className="mt-0.5 text-xs text-slate-600">{rp(amount)}</p>}
       </div>
-      <div className="sm:col-span-2">
+      <div className="sm:col-span-4">
         <label htmlFor="tx-desc" className={lbl}>Uraian <span className="font-normal text-slate-500">(opsional)</span></label>
         <input id="tx-desc" name="description" maxLength={500} defaultValue="" placeholder="Kosongkan = otomatis dari nama rekening" className={cls} />
       </div>
@@ -104,6 +111,7 @@ export function TransactionForm({ versionId, year, items, recent, suppliers, met
               <>
                 <select id="tx-sup" name="supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={cls}><option value="">— Tanpa penyedia —</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
                 <button type="button" onClick={() => { setNewSup(true); setSupplierId(""); }} className="mt-1 text-xs font-medium text-navy-700 underline">Penyedia belum ada? Tambah manual</button>
+                <a href="/realisasi/penyedia" className="ml-3 text-xs font-medium text-navy-700 underline">Kelola penyedia (ubah/hapus)</a>
               </>
             ) : (
               <div className="space-y-2 rounded-lg border border-navy-100 bg-navy-50/40 p-3">
@@ -120,7 +128,6 @@ export function TransactionForm({ versionId, year, items, recent, suppliers, met
                     {dupSup.similar.map((s) => <button key={s.id} type="button" className="mr-2 font-semibold underline" onClick={() => { setSupplierId(s.id); setNewSup(false); setSupName(""); }}>{s.label}</button>)}
                   </p>
                 )}
-                <input name="supplierNpwp" maxLength={40} inputMode="numeric" placeholder="NPWP (opsional, 15/16 digit)" aria-label="NPWP penyedia baru" className={cls} />
                 <input name="supplierAddress" maxLength={500} placeholder="Alamat (opsional)" aria-label="Alamat penyedia baru" className={cls} />
                 <p className="text-xs text-slate-600">Penyedia baru otomatis tersimpan di Data Master → Penyedia.</p>
                 <button type="button" onClick={() => { setNewSup(false); setSupName(""); }} className="text-xs font-medium text-navy-700 underline">Batal, pilih dari daftar</button>

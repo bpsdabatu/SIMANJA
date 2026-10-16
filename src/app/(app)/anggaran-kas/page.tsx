@@ -13,6 +13,7 @@ import { EmptyState, Flash, PageHeader } from "@/components/ui/page";
 import { ConfirmSubmit, PrintButton, SubmitButton } from "@/components/ui/submit-button";
 import { PrintFooter, PrintHeader, SignatureBlock } from "@/components/ui/report";
 import { cashStatusAction, deleteCashPlanAction, importCashPlansAction, saveCashPlanAction } from "./actions";
+import { CashPlanGrid, type GridRow } from "./cash-plan-grid";
 
 export const metadata: Metadata = { title: "Anggaran Kas" };
 export const dynamic = "force-dynamic";
@@ -52,6 +53,22 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
   const plans = new Map(plansRes.rows.map((p) => [p.budget_item_id, p]));
   const canEdit = user.permissions.has("cashplan.edit");
   const canFinalize = user.permissions.has("cashplan.finalize");
+  // Akun selain admin memakai tabel ringkas (isi semua butir sekaligus); admin tetap memakai tampilan kartu yang sudah ada.
+  const isAdmin = user.roles.includes("admin");
+  const gridRows: GridRow[] = items.map((r) => {
+    const b = r.budget_items!;
+    const plan = plans.get(r.budget_item_id);
+    return {
+      itemId: r.budget_item_id, planId: plan?.id ?? null,
+      subCode: b.sub_activities?.code ?? "", subName: b.sub_activities?.name ?? "",
+      account: `${b.expenditure_accounts?.code ?? ""} ${b.expenditure_accounts?.name ?? ""}`.trim(), desc: b.description ?? "", pptk: b.pptk?.full_name ?? "",
+      pagu: Number(r.pagu),
+      months: MONTHS.map((_, i) => Number(plan?.cash_budget_periods.find((p) => p.period_no === i + 1)?.amount ?? 0)),
+      status: plan?.status ?? "none", rev: plan?.revision_no ?? 0, reason: plan?.change_reason ?? null,
+      mine: b.pptk_id === user.id,
+    };
+  });
+  const gridKey = gridRows.map((g) => `${g.itemId}:${g.status}:${g.rev}:${g.months.join(",")}`).join("|");
 
   const totals = MONTHS.map((_, i) => items.reduce((s, r) => s + Number(plans.get(r.budget_item_id)?.cash_budget_periods.find((p) => p.period_no === i + 1)?.amount ?? 0), 0));
   const grand = totals.reduce((a, b) => a + b, 0);
@@ -63,7 +80,7 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
       <PageHeader
         eyebrow={`TA ${context.year} · ${STAGE_LABEL[context.stage]}`}
         title="Anggaran Kas"
-        description="Rencana penarikan kas bulanan per butir, disusun dari data Input Anggaran. PPTK menyusun dan mengajukan; pejabat berwenang mengembalikan atau memfinalisasi. Total kas tidak boleh melebihi pagu."
+        description="Rencana penarikan kas bulanan per butir, disusun dari data Input Anggaran. PPTK mengisi semua butir dalam satu tabel lalu menyimpan/mengajukan sekaligus; pejabat berwenang mengembalikan atau memfinalisasi. Total kas tidak boleh melebihi pagu."
         actions={<>
           <a href="/anggaran-kas/export?format=xlsx" className={buttonVariants({ variant: "outline" })}><Download size={16} aria-hidden /> Excel</a>
           <a href="/anggaran-kas/export?format=csv" className={buttonVariants({ variant: "outline" })}><Download size={16} aria-hidden /> CSV</a>
@@ -112,6 +129,12 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
         : items.length === 0 ? <Card><EmptyState title="Belum ada butir anggaran">Butir yang ditugaskan kepada Anda akan tampil di sini setelah anggaran diinput.</EmptyState></Card>
         : (
         <>
+        {!isAdmin && (
+          <div className="no-print">
+            <CashPlanGrid key={gridKey} versionId={context.versionId} rows={gridRows} canEdit={canEdit} canSubmit={user.permissions.has("cashplan.submit")} canFinalize={canFinalize} />
+          </div>
+        )}
+        {isAdmin && (
         <div className="no-print space-y-4">
           {items.map((r) => {
             const b = r.budget_items!;
@@ -197,6 +220,7 @@ export default async function AnggaranKasPage({ searchParams }: { searchParams: 
             </div>
           </Card>
         </div>
+        )}
 
         {/* Tampilan cetak: rekap seluruh butir dalam satu tabel */}
         <div className="print-only">

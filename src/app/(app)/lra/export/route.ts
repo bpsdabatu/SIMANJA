@@ -11,7 +11,7 @@ const LEVEL = ["Program", "Kegiatan", "Sub Kegiatan", "Belanja"];
 
 export async function GET(req: NextRequest) {
   const user = await getSessionUser();
-  if (!user || !user.permissions.has("lra.export")) return new NextResponse("Tidak berwenang", { status: 403 });
+  if (!user || !user.permissions.has("lra.export") || !user.roles.includes("admin")) return new NextResponse("Tidak berwenang", { status: 403 });
   const ctx = await getBudgetContext();
   if (!ctx) return new NextResponse("Konteks anggaran belum dipilih", { status: 409 });
   const s = req.nextUrl.searchParams.get("sampai");
